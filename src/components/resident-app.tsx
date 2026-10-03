@@ -155,7 +155,7 @@ export function ResidentApp() {
             </section>
 
             <section className="px-5 pb-28 pt-8 sm:px-0 sm:pb-12">
-              <div className="mb-4 flex items-center justify-between"><div><p className="text-xl font-black tracking-[-0.035em]">Laundry room now</p><p className="text-sm text-muted-foreground">Updated just now</p></div><Button variant="ghost" onClick={() => setView("queue")} className="rounded-xl text-primary">View all</Button></div>
+              <div className="mb-4 flex items-center justify-between"><div><p className="text-xl font-black tracking-[-0.035em]">Laundry room status</p><p className="text-sm text-muted-foreground">Updated just now</p></div><Button variant="ghost" onClick={() => setView("queue")} className="rounded-xl text-primary">View all</Button></div>
               <div className="grid gap-3 lg:grid-cols-4">
                 {state.machines.map((machine) => {
                   const Icon = machine.kind === "washer" ? Droplets : Sparkles;
