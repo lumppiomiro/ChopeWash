@@ -19,6 +19,7 @@ import { Toaster } from "sonner";
 import { BookingFlow } from "@/components/booking-flow";
 import { BrandMark } from "@/components/brand-mark";
 import { MachineIllustration } from "@/components/machine-illustration";
+import { YourLaundry } from "@/components/your-laundry";
 import { QueueFlow } from "@/components/queue-flow";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -143,6 +144,8 @@ export function ResidentApp() {
                 <div className="flex gap-2 rounded-2xl border bg-white p-2 text-sm shadow-sm"><span className="rounded-xl bg-mint px-3 py-2 font-bold text-emerald-900">{availableCount} available</span><span className="px-3 py-2 font-semibold text-muted-foreground">RC4 · Level 1</span></div>
               </div>
             </section>
+
+            <YourLaundry state={state} showBookings={showBookings} showQueue={showQueue} />
 
             <section className="grid gap-3 px-5 pt-7 sm:grid-cols-2 sm:px-0">
               <button onClick={() => setBookingOpen(true)} className="group relative overflow-hidden rounded-[28px] bg-primary p-6 text-left text-white shadow-[0_18px_42px_rgba(47,77,255,0.24)] transition-transform hover:-translate-y-0.5">

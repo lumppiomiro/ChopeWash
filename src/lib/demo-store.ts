@@ -25,6 +25,7 @@ export type Booking = {
   duration: 30 | 45 | 60;
   dryerTime?: string;
   status: "confirmed" | "checked-in" | "complete";
+  startedAt?: string;
 };
 
 export type QueueEntry = {
@@ -33,6 +34,7 @@ export type QueueEntry = {
   position: number;
   joinedAt: string;
   status: "waiting" | "offered" | "claimed";
+  estimatedReadyAt?: string;
 };
 
 export type DemoState = {
@@ -99,6 +101,7 @@ export function useDemoStore() {
       position: (machine?.queueLength ?? 0) + 1,
       joinedAt: new Date().toISOString(),
       status: "waiting",
+      estimatedReadyAt: new Date(Date.now() + ((machine?.minutesLeft ?? 0) + (machine?.queueLength ?? 0) * 45) * 60_000).toISOString(),
     };
     save((current) => ({
       ...current,
@@ -118,7 +121,7 @@ export function useDemoStore() {
   const checkIn = useCallback((id: string) => {
     save((current) => ({
       ...current,
-      bookings: current.bookings.map((booking) => booking.id === id ? { ...booking, status: "checked-in" } : booking),
+      bookings: current.bookings.map((booking) => booking.id === id ? { ...booking, status: "checked-in", startedAt: booking.startedAt ?? new Date().toISOString() } : booking),
     }));
   }, [save]);
 
