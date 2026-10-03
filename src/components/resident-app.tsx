@@ -29,7 +29,7 @@ import { Label } from "@/components/ui/label";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { useDemoStore } from "@/lib/demo-store";
 import { cn } from "@/lib/utils";
-import { signInWithUsername } from "@/lib/supabase";
+import { createPrototypeAccount, signInWithUsername } from "@/lib/supabase";
 import { useChopeWashTools } from "@/lib/use-webmcp";
 
 type View = "home" | "bookings" | "queue";
@@ -44,6 +44,8 @@ function statusLabel(status: string, minutes: number) {
 export function ResidentApp() {
   const { state, addBooking, joinQueue } = useDemoStore();
   const [signedIn, setSignedIn] = useState(false);
+  const [username, setUsername] = useState("tessa");
+  const [creatingAccount, setCreatingAccount] = useState(false);
   const [view, setView] = useState<View>("home");
   const [bookingOpen, setBookingOpen] = useState(false);
   const [queueOpen, setQueueOpen] = useState(false);
@@ -52,7 +54,13 @@ export function ResidentApp() {
   const [loginPending, setLoginPending] = useState(false);
 
   useEffect(() => {
-    setSignedIn(window.localStorage.getItem("chopewash-session") === "tessa");
+    const storedUsername = window.localStorage.getItem("chopewash-session");
+    if (!storedUsername) return;
+    const timer = window.setTimeout(() => {
+      setUsername(storedUsername);
+      setSignedIn(true);
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, []);
 
   const availableCount = useMemo(() => state.machines.filter((machine) => machine.status === "available").length, [state.machines]);
@@ -67,11 +75,14 @@ export function ResidentApp() {
     setLoginPending(true);
     setLoginError("");
     try {
-      await signInWithUsername(username, password);
-      window.localStorage.setItem("chopewash-session", username || "tessa");
+      const result = creatingAccount
+        ? await createPrototypeAccount(username, password)
+        : await signInWithUsername(username, password);
+      window.localStorage.setItem("chopewash-session", result.username);
+      setUsername(result.username);
       setSignedIn(true);
-    } catch {
-      setLoginError("That username or password didn’t work.");
+    } catch (error) {
+      setLoginError(error instanceof Error ? error.message : "That username or password didn’t work.");
     } finally {
       setLoginPending(false);
     }
@@ -92,11 +103,14 @@ export function ResidentApp() {
             </div>
           </div>
           <form className="space-y-5 px-7 py-7" onSubmit={(event) => { event.preventDefault(); void signIn(event.currentTarget); }}>
-            <div className="space-y-2"><Label htmlFor="username">Username</Label><Input id="username" name="username" defaultValue="tessa" autoComplete="username" className="h-12 rounded-2xl bg-surface" /></div>
-            <div className="space-y-2"><Label htmlFor="password">Password</Label><Input id="password" name="password" type="password" defaultValue="prototype" autoComplete="current-password" className="h-12 rounded-2xl bg-surface" /></div>
+            <div className="space-y-2"><Label htmlFor="username">Username</Label><Input key={`username-${creatingAccount}`} id="username" name="username" defaultValue={creatingAccount ? "" : "tessa"} autoComplete="username" className="h-12 rounded-2xl bg-surface" /></div>
+            <div className="space-y-2"><Label htmlFor="password">Password</Label><Input key={`password-${creatingAccount}`} id="password" name="password" type="password" defaultValue={creatingAccount ? "" : "prototype"} autoComplete={creatingAccount ? "new-password" : "current-password"} className="h-12 rounded-2xl bg-surface" /></div>
             {loginError && <p className="rounded-xl bg-red-50 px-3 py-2 text-sm font-bold text-red-700">{loginError}</p>}
-            <Button disabled={loginPending} className="h-12 w-full rounded-2xl text-[0.98rem] font-bold" type="submit">{loginPending ? "Signing in…" : "Enter laundry room"} <LogIn className="size-4" /></Button>
-            <p className="text-center text-xs leading-5 text-muted-foreground">Prototype account is pre-filled. No personal data required.</p>
+            <Button disabled={loginPending} className="h-12 w-full rounded-2xl text-[0.98rem] font-bold" type="submit">{loginPending ? "Please wait…" : creatingAccount ? "Create account" : "Enter laundry room"} <LogIn className="size-4" /></Button>
+            <button type="button" className="w-full text-center text-sm font-bold text-primary" onClick={() => { setCreatingAccount((current) => !current); setLoginError(""); }}>
+              {creatingAccount ? "Already have an account? Sign in" : "New here? Create a prototype account"}
+            </button>
+            <p className="text-center text-xs leading-5 text-muted-foreground">{creatingAccount ? "Prototype accounts stay on this test device." : "Try tessa / prototype or miro / 1234."}</p>
           </form>
         </div>
       </main>
@@ -126,7 +140,7 @@ export function ResidentApp() {
           <div className="animate-float-in">
             <section className="px-5 pt-4 sm:px-0">
               <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
-                <div><p className="text-sm font-bold text-primary">Saturday, 3 October</p><h1 className="mt-1 text-[2.25rem] font-black leading-tight tracking-[-0.055em] sm:text-5xl">Good afternoon, Tessa.</h1><p className="mt-2 text-base text-muted-foreground">What works for your schedule today?</p></div>
+                <div><p className="text-sm font-bold text-primary">Saturday, 3 October</p><h1 className="mt-1 text-[2.25rem] font-black leading-tight tracking-[-0.055em] sm:text-5xl">Good afternoon, {username.charAt(0).toUpperCase() + username.slice(1)}.</h1><p className="mt-2 text-base text-muted-foreground">What works for your schedule today?</p></div>
                 <div className="flex gap-2 rounded-2xl border bg-white p-2 text-sm shadow-sm"><span className="rounded-xl bg-mint px-3 py-2 font-bold text-emerald-900">{availableCount} available</span><span className="px-3 py-2 font-semibold text-muted-foreground">RC4 · Level 1</span></div>
               </div>
             </section>

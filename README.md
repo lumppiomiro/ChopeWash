@@ -18,7 +18,7 @@ npm install
 npm run dev
 ```
 
-Open `http://localhost:3000`. The pre-filled prototype credentials are `tessa` / `prototype`.
+Open `http://localhost:3000`. The pre-filled prototype credentials are `tessa` / `prototype`; `miro` / `1234` also works. Testers can create device-local prototype accounts from the sign-in screen.
 
 ## Supabase setup
 
