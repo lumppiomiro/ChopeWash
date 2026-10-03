@@ -3,10 +3,10 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowUpRight, Clock3 } from "lucide-react";
-import type { DemoState } from "@/lib/demo-store";
+import type { LaundryState } from "@/lib/laundry-store";
 import { countdown, getLaundryEvents, type LaundryEvent } from "@/lib/laundry-events";
 
-export function YourLaundry({ state, showBookings, showQueue }: { state: DemoState; showBookings: () => void; showQueue: () => void }) {
+export function YourLaundry({ state, showBookings, showQueue }: { state: LaundryState; showBookings: () => void; showQueue: () => void }) {
   const [now, setNow] = useState<number | null>(null);
   useEffect(() => {
     const tick = () => setNow(Date.now());

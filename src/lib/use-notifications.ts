@@ -1,76 +1,108 @@
 "use client";
-
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import type { DemoState } from "@/lib/demo-store";
-import { notificationEvents, type LaundryNotice, type NoticeGroup } from "@/lib/notification-events";
-
+import type { LaundryState } from "@/lib/laundry-store";
+import type { LaundryNotice, NoticeGroup } from "@/lib/notification-events";
+import { requireSupabase } from "@/lib/supabase";
 type Preferences = Record<NoticeGroup, boolean> & { device: boolean };
-type Inbox = { notices: LaundryNotice[]; seen: string[]; preferences: Preferences; queueSnapshot?: DemoState["queueEntries"] };
-const defaults: Inbox = { notices: [], seen: [], preferences: { bookings: true, queue: true, cycles: true, device: false } };
-function readInbox(key: string): Inbox {
-  try { const saved = JSON.parse(localStorage.getItem(key) ?? "null"); return saved ? { ...defaults, ...saved, preferences: { ...defaults.preferences, ...saved.preferences } } : defaults; }
-  catch { return defaults; }
-}
-
+const defaults: Preferences = { bookings: true, queue: true, cycles: true, device: false };
 export async function deviceNotice(notice: Pick<LaundryNotice, "id" | "title" | "body" | "view">) {
   if (!("Notification" in window) || Notification.permission !== "granted") return;
   const registration = await navigator.serviceWorker.getRegistration("/");
   if (!registration?.active) throw new Error("Alerts are still preparing. Please try again.");
-  await registration.showNotification(notice.title, { body: notice.body, icon: "/icons/app-192.png", badge: "/icons/app-192.png", tag: notice.id, data: { url: `/?view=${notice.view}` } });
+  await registration.showNotification(notice.title, { body: notice.body, icon: "/icons/app-192.png", tag: notice.id, data: { url: `/?view=${notice.view}` } });
 }
-
-export function useNotifications(state: DemoState, active: boolean, username: string, navigate: (view: "bookings" | "queue") => void) {
-  const key = `chopewash-inbox-v1-${username}`;
-  const [inbox, setInbox] = useState<Inbox>(defaults);
+async function syncPush(preferences: Preferences) {
+  const client = requireSupabase();
+  const { data } = await client.auth.getUser();
+  if (!data.user) throw new Error("Sign in before enabling device alerts.");
+  const registration = await navigator.serviceWorker.getRegistration("/");
+  const subscription = await registration?.pushManager?.getSubscription();
+  if (!subscription) return;
+  if (!preferences.device) {
+    const result = await client.from("rc4_push_subscriptions").delete().eq("endpoint", subscription.endpoint);
+    if (result.error) throw result.error;
+    await subscription.unsubscribe();
+    return;
+  }
+  const result = await client.from("rc4_push_subscriptions").upsert({
+    endpoint: subscription.endpoint, user_id: data.user.id, subscription: subscription.toJSON(),
+    preferences: { bookings: preferences.bookings, queue: preferences.queue, cycles: preferences.cycles },
+    updated_at: new Date().toISOString(),
+  }, { onConflict: "endpoint" });
+  if (result.error) throw result.error;
+}
+export async function disconnectPush() {
+  if (!("serviceWorker" in navigator)) return;
+  await syncPush({ ...defaults, device: false });
+}
+export function useNotifications(_state: LaundryState, active: boolean, username: string, navigate: (view: "bookings" | "queue") => void) {
+  const [notices, setNotices] = useState<LaundryNotice[]>([]);
+  const [preferences, setPreferences] = useState<Preferences>(defaults);
   const [permission, setPermission] = useState<NotificationPermission | "unsupported">("unsupported");
-  const loadedKey = useRef<string | null>(null);
+  const seen = useRef<Set<string> | null>(null);
+  const key = `chopewash-notification-preferences-${username}`;
   useEffect(() => {
     if (!active) return;
-    const tick = () => {
-      const initial = loadedKey.current !== key;
-      const stored = readInbox(key);
-      const now = Date.now();
-      const candidates = notificationEvents(state, now);
-      for (const old of stored.queueSnapshot ?? []) {
-        if (state.queueEntries.some((entry) => entry.id === old.id)) continue;
-        // Ignore old duplicate entries removed during migration and simulator resets.
-        if (!state.machines.length || state.queueEntries.some((entry) => entry.kind === old.kind && ["waiting", "offered", "claimed"].includes(entry.status))) continue;
-        if (old.status === "waiting" || old.status === "offered") candidates.push({ id: `${old.id}:left`, title: "You’ve left the queue", body: `Your place in the ${old.kind} queue has been released. You can join again anytime.`, time: now, group: "queue", view: "queue" });
-      }
-      const fresh = candidates.filter((notice) => !stored.seen.includes(notice.id) && stored.preferences[notice.group]);
-      const next = { ...stored, seen: [...new Set([...stored.seen, ...fresh.map((notice) => notice.id)])], notices: [...fresh, ...stored.notices].sort((a, b) => b.time - a.time).slice(0, 100), queueSnapshot: state.queueEntries };
-      localStorage.setItem(key, JSON.stringify(next));
-      setInbox(next);
-      setPermission("Notification" in window ? Notification.permission : "unsupported");
-      if (!initial) for (const notice of fresh) {
-        if (document.visibilityState === "visible") toast(notice.title, { description: notice.body, duration: notice.urgent ? 8000 : 5000, action: { label: notice.view === "queue" ? "View queue" : "View booking", onClick: () => navigate(notice.view) } });
-        else if (stored.preferences.device) void deviceNotice(notice).catch(() => {});
-      }
-      loadedKey.current = key;
+    let mounted = true;
+    let pending = false;
+    seen.current = null;
+    const tick = async () => {
+      if (pending) return; pending = true;
+      try {
+        const saved = JSON.parse(localStorage.getItem(key) ?? "{}");
+        const prefs = { ...defaults, ...saved } as Preferences;
+        if (prefs.device && "serviceWorker" in navigator) {
+          const registration = await navigator.serviceWorker.getRegistration("/");
+          if (!await registration?.pushManager?.getSubscription()) prefs.device = false;
+        }
+        const { data, error } = await requireSupabase().from("rc4_notifications").select("id,title,body,category,view,created_at,read_at").order("created_at", { ascending: false }).limit(100);
+        if (error || !mounted) return;
+        const all: LaundryNotice[] = (data ?? []).map(row => ({ id: row.id, title: row.title, body: row.body, group: row.category as NoticeGroup, view: row.view as LaundryNotice["view"], time: Date.parse(row.created_at), read: Boolean(row.read_at) }));
+        const visible = all.filter(notice => prefs[notice.group]);
+        if (seen.current && document.visibilityState === "visible") for (const notice of visible) {
+          if (!seen.current.has(notice.id)) toast(notice.title, { description: notice.body, action: { label: "View", onClick: () => navigate(notice.view) } });
+        }
+        seen.current = new Set(all.map(notice => notice.id));
+        setNotices(visible); setPreferences(prefs);
+        setPermission("Notification" in window ? Notification.permission : "unsupported");
+      } catch { /* Shared-state connection banner reports outages; never fabricate events. */ }
+      finally { pending = false; }
     };
-    // Keep the initial pass quiet; refreshes should never re-alert old events.
-    const first = window.setTimeout(tick, 0);
-    const interval = window.setInterval(tick, 5000);
-    const wake = () => tick();
-    window.addEventListener("focus", wake);
-    return () => { window.clearTimeout(first); window.clearInterval(interval); window.removeEventListener("focus", wake); };
-  }, [active, key, navigate, state]);
-  const change = useCallback((update: (current: Inbox) => Inbox) => {
-    const next = update(readInbox(key)); localStorage.setItem(key, JSON.stringify(next)); setInbox(next);
-  }, [key]);
+    void tick();
+    const timer = window.setInterval(tick, 5000);
+    return () => { mounted = false; clearInterval(timer); };
+  }, [active, key, navigate]);
+  const change = useCallback(async (name: keyof Preferences, value: boolean) => {
+    const next = { ...preferences, [name]: value };
+    try {
+      if ("serviceWorker" in navigator) await syncPush(next);
+      localStorage.setItem(key, JSON.stringify(next)); setPreferences(next);
+    } catch (error) { toast.error(error instanceof Error ? error.message : "Could not save notification preferences."); }
+  }, [key, preferences]);
   return {
-    notices: inbox.notices, unread: inbox.notices.filter((notice) => !notice.read).length, preferences: inbox.preferences, permission,
-    markRead: (id?: string) => change((current) => ({ ...current, notices: current.notices.map((notice) => !id || notice.id === id ? { ...notice, read: true } : notice) })),
-    setPreference: (name: keyof Preferences, value: boolean) => change((current) => ({ ...current, preferences: { ...current.preferences, [name]: value } })),
+    notices, unread: notices.filter(notice => !notice.read).length, preferences, permission,
+    markRead: async (id?: string) => {
+      const result = await requireSupabase().rpc("rc4_action", { action: "readNotifications", payload: id ? { id } : {} });
+      if (result.error) { toast.error("Could not mark notifications read."); return; }
+      setNotices(current => current.map(notice => !id || notice.id === id ? { ...notice, read: true } : notice));
+    },
+    setPreference: (name: keyof Preferences, value: boolean) => { void change(name, value); },
     enableDevice: async () => {
-      if (!("Notification" in window)) throw new Error("This browser doesn’t support device alerts. On iPhone, install ChopeWash and open it from your Home Screen first.");
-      if (!("serviceWorker" in navigator) || !window.isSecureContext) throw new Error("Device alerts need a supported browser and a secure connection. Your in-app updates are still available.");
+      if (!("Notification" in window) || !("PushManager" in window)) throw new Error("This browser doesn't support Web Push. On iPhone, install ChopeWash and open it from the Home Screen first.");
+      const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+      if (!publicKey) throw new Error("Closed-app alerts need backend setup. Ask the project owner to configure Web Push. Your in-app inbox already works.");
       const result = await Notification.requestPermission(); setPermission(result);
-      if (result !== "granted") throw new Error(result === "denied" ? "Notifications are blocked. You can change this in your browser or phone settings." : "Notifications weren’t enabled. Your in-app updates are still available.");
-      const registration = await navigator.serviceWorker.getRegistration("/");
-      if (!registration?.active) throw new Error("Device alerts are still preparing. Please try enabling them again in a moment.");
-      change((current) => ({ ...current, preferences: { ...current.preferences, device: true } }));
+      if (result !== "granted") throw new Error("Notifications weren't enabled. Check your browser notification settings.");
+      const registration = await navigator.serviceWorker.ready;
+      const decoded = atob(publicKey.replace(/-/g, "+").replace(/_/g, "/"));
+      const applicationServerKey = Uint8Array.from(decoded, char => char.charCodeAt(0));
+      const subscription = await registration.pushManager.getSubscription() ?? await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey });
+      try {
+        const next = { ...preferences, device: true };
+        await syncPush(next);
+        localStorage.setItem(key, JSON.stringify(next)); setPreferences(next);
+      } catch (error) { await subscription.unsubscribe(); throw error; }
     },
   };
 }

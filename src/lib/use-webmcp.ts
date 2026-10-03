@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import type { Booking, DemoState, MachineKind, QueueEntry } from "@/lib/demo-store";
+import type { Booking, LaundryState, MachineKind, QueueEntry } from "@/lib/laundry-store";
 
 type ModelTool = {
   name: string;
@@ -23,9 +23,9 @@ export function useChopeWashTools({
   showQueue,
   showBookings,
 }: {
-  state: DemoState;
-  addBooking: (booking: Booking) => void;
-  joinQueue: (kind: MachineKind) => QueueEntry;
+  state: LaundryState;
+  addBooking: (booking: Booking) => Promise<void>;
+  joinQueue: (kind: MachineKind) => Promise<QueueEntry>;
   showQueue: () => void;
   showBookings: () => void;
 }) {
@@ -54,10 +54,10 @@ export function useChopeWashTools({
       description: "Join the queue-only washer or dryer and open the queue view.",
       inputSchema: { type: "object", properties: { kind: { type: "string", enum: ["washer", "dryer"] } }, required: ["kind"], additionalProperties: false },
       annotations: { readOnlyHint: false, untrustedContentHint: false },
-      execute: (input) => {
+      execute: async (input) => {
         const kind = (input as { kind?: unknown }).kind;
         if (kind !== "washer" && kind !== "dryer") throw new Error("kind must be washer or dryer");
-        const entry = joinQueue(kind);
+        const entry = await joinQueue(kind);
         showQueue();
         return { id: entry.id, kind: entry.kind, position: entry.position, status: entry.status };
       },
@@ -66,7 +66,7 @@ export function useChopeWashTools({
     register({
       name: "create_laundry_booking",
       title: "Create a laundry booking",
-      description: "Create a 30, 45, or 60 minute prototype booking and open the bookings view.",
+      description: "Create a 30, 45, or 60 minute shared RC4 booking and open the bookings view.",
       inputSchema: {
         type: "object",
         properties: {
@@ -79,16 +79,16 @@ export function useChopeWashTools({
         additionalProperties: false,
       },
       annotations: { readOnlyHint: false, untrustedContentHint: false },
-      execute: (input) => {
+      execute: async (input) => {
         const value = input as { kind?: unknown; dateIso?: unknown; startTime?: unknown; duration?: unknown };
         if (!(["wash", "dry", "both"] as unknown[]).includes(value.kind) || typeof value.dateIso !== "string" || typeof value.startTime !== "string" || !([30, 45, 60] as unknown[]).includes(value.duration)) throw new Error("Invalid booking details");
         const booking: Booking = {
           id: crypto.randomUUID(), kind: value.kind as Booking["kind"], dateIso: value.dateIso,
           dateLabel: value.dateIso, startTime: value.startTime, duration: value.duration as Booking["duration"], status: "confirmed",
         };
-        addBooking(booking);
+        await addBooking(booking);
         showBookings();
-        return { id: booking.id, status: booking.status };
+        return { status: "confirmed", message: "Reserved in RC4. Read your bookings for server IDs." };
       },
     });
 

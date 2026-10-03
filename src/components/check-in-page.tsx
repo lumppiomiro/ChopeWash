@@ -6,24 +6,28 @@ import { Check, Clock3, ScanLine } from "lucide-react";
 import { BrandMark } from "@/components/brand-mark";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { useDemoStore } from "@/lib/demo-store";
+import { useLaundryStore } from "@/lib/laundry-store";
 
 export function CheckInPage({ bookingId, source, entryId }: { bookingId?: string; source?: string; entryId?: string }) {
-  const { state, ready, checkIn, claimQueue } = useDemoStore();
+  const { state, ready, checkIn, claimQueue } = useLaundryStore();
   const queueMode = source === "queue";
-  const booking = queueMode ? undefined : bookingId ? state.bookings.find((item) => item.id === bookingId) : state.bookings[0];
+  const booking = queueMode ? undefined : bookingId ? state.bookings.find((item) => item.id === bookingId) : undefined;
   const entry = state.queueEntries.find((item) => item.id === entryId);
   const [duration, setDuration] = useState<30 | 45 | 60>(45);
   const [complete, setComplete] = useState(false);
   const [error, setError] = useState("");
-  const confirm = () => {
+  const [pending, setPending] = useState(false);
+  const confirm = async () => {
+    setPending(true);
     try {
       if (queueMode) {
         if (!entry) throw new Error("No active queue offer selected. Return to your queue.");
-        claimQueue(entry.id, duration);
-      } else if (booking) checkIn(booking.id);
+        await claimQueue(entry.id, duration);
+      } else if (booking) await checkIn(booking.id);
+      else throw new Error("Sign in and select your reservation or queue offer from Home.");
       setComplete(true);
     } catch (failure) { setError(failure instanceof Error ? failure.message : "Could not start the cycle."); }
+    finally { setPending(false); }
   };
   const machine = queueMode ? entry ? entry.kind === "dryer" ? "Dryer 02" : "Washer 02" : "Queue check-in" : booking ? booking.kind === "dry" ? "Dryer 01" : "Washer 01" : "Room check-in";
   const validQueueOffer = entry?.status === "offered";
@@ -36,7 +40,7 @@ export function CheckInPage({ bookingId, source, entryId }: { bookingId?: string
           {queueMode && validQueueOffer && <fieldset><legend className="mb-3 font-bold">Cycle length</legend><div className="grid grid-cols-3 gap-2">{([30, 45, 60] as const).map((value) => <Button key={value} aria-pressed={duration === value} variant={duration === value ? "default" : "outline"} onClick={() => setDuration(value)}>{value} min</Button>)}</div></fieldset>}
           <div className="flex gap-3 rounded-[20px] border p-4"><Clock3 className="mt-0.5 size-5 shrink-0 text-primary" /><p className="text-sm leading-5">{queueMode || booking ? `${queueMode ? duration : booking?.duration}-minute cycle. The timer starts when you confirm downstairs.` : "Use Home to follow your laundry status."}</p></div>
           {error && <p role="alert" className="rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p>}
-          <Button disabled={!ready || (queueMode && !validQueueOffer)} className="h-12 w-full rounded-2xl font-extrabold" onClick={confirm}>{booking || queueMode ? "Confirm and start cycle" : "Confirm room arrival"}</Button><Link href="/" className={cn(buttonVariants({ variant: "ghost" }), "w-full rounded-2xl")}>Back to ChopeWash</Link>
+          <Button disabled={pending || !ready || (queueMode ? !validQueueOffer : booking?.status !== "confirmed")} className="h-12 w-full rounded-2xl font-extrabold" onClick={confirm}>{booking || queueMode ? "Confirm and start cycle" : "Confirm room arrival"}</Button><Link href="/" className={cn(buttonVariants({ variant: "ghost" }), "w-full rounded-2xl")}>Back to ChopeWash</Link>
         </div>
       </>}
     </div>

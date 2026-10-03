@@ -15,7 +15,7 @@ import {
   Settings2,
   WashingMachine,
 } from "lucide-react";
-import { Toaster } from "sonner";
+import { toast, Toaster } from "sonner";
 import { BookingFlow } from "@/components/booking-flow";
 import { BrandMark } from "@/components/brand-mark";
 import { MachineIllustration } from "@/components/machine-illustration";
@@ -28,11 +28,11 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { useDemoStore } from "@/lib/demo-store";
+import { useLaundryStore } from "@/lib/laundry-store";
 import { cn } from "@/lib/utils";
-import { createPrototypeAccount, signInWithUsername } from "@/lib/supabase";
+import { createResidentAccount, getSupabaseClient, signInWithUsername } from "@/lib/supabase";
 import { useChopeWashTools } from "@/lib/use-webmcp";
-import { useNotifications } from "@/lib/use-notifications";
+import { disconnectPush, useNotifications } from "@/lib/use-notifications";
 import { NotificationCentre } from "@/components/notification-centre";
 import { InstallApp } from "@/components/install-app";
 
@@ -46,9 +46,9 @@ function statusLabel(status: string, minutes: number) {
 }
 
 export function ResidentApp() {
-  const { state, ready, addBooking, joinQueue, leaveQueue } = useDemoStore();
+  const { state, ready, error: backendError, addBooking, joinQueue, leaveQueue, cancelBooking, collectBooking } = useLaundryStore();
   const [signedIn, setSignedIn] = useState(false);
-  const [username, setUsername] = useState("tessa");
+  const [username, setUsername] = useState("");
   const [creatingAccount, setCreatingAccount] = useState(false);
   const [view, setView] = useState<View>("home");
   const [bookingOpen, setBookingOpen] = useState(false);
@@ -59,15 +59,17 @@ export function ResidentApp() {
   const [loginPending, setLoginPending] = useState(false);
 
   useEffect(() => {
-    const storedUsername = window.localStorage.getItem("chopewash-session");
-    if (!storedUsername) return;
-    const timer = window.setTimeout(() => {
-      setUsername(storedUsername);
-      setSignedIn(true);
+    const client = getSupabaseClient();
+    if (!client) return;
+    const apply = (email?: string) => {
+      setUsername(email?.split("@")[0] ?? "");
+      setSignedIn(Boolean(email));
       const linkedView = new URLSearchParams(window.location.search).get("view");
       if (linkedView === "queue" || linkedView === "bookings") setView(linkedView);
-    }, 0);
-    return () => window.clearTimeout(timer);
+    };
+    void client.auth.getSession().then(({ data }) => apply(data.session?.user.email));
+    const { data } = client.auth.onAuthStateChange((_event, session) => apply(session?.user.email));
+    return () => data.subscription.unsubscribe();
   }, []);
 
   const availableCount = useMemo(() => state.machines.filter((machine) => machine.status === "available").length, [state.machines]);
@@ -85,9 +87,8 @@ export function ResidentApp() {
     setLoginError("");
     try {
       const result = creatingAccount
-        ? await createPrototypeAccount(username, password)
+        ? await createResidentAccount(username, password)
         : await signInWithUsername(username, password);
-      window.localStorage.setItem("chopewash-session", result.username);
       setUsername(result.username);
       setSignedIn(true);
     } catch (error) {
@@ -112,14 +113,14 @@ export function ResidentApp() {
             </div>
           </div>
           <form className="space-y-5 px-7 py-7" onSubmit={(event) => { event.preventDefault(); void signIn(event.currentTarget); }}>
-            <div className="space-y-2"><Label htmlFor="username">Username</Label><Input key={`username-${creatingAccount}`} id="username" name="username" defaultValue={creatingAccount ? "" : "tessa"} autoComplete="username" className="h-12 rounded-2xl bg-surface" /></div>
-            <div className="space-y-2"><Label htmlFor="password">Password</Label><Input key={`password-${creatingAccount}`} id="password" name="password" type="password" defaultValue={creatingAccount ? "" : "prototype"} autoComplete={creatingAccount ? "new-password" : "current-password"} className="h-12 rounded-2xl bg-surface" /></div>
+            <div className="space-y-2"><Label htmlFor="username">Username</Label><Input key={`username-${creatingAccount}`} id="username" name="username" required defaultValue="" autoComplete="username" className="h-12 rounded-2xl bg-surface" /></div>
+            <div className="space-y-2"><Label htmlFor="password">Password</Label><Input key={`password-${creatingAccount}`} id="password" name="password" type="password" required minLength={creatingAccount ? 8 : 1} defaultValue="" autoComplete={creatingAccount ? "new-password" : "current-password"} className="h-12 rounded-2xl bg-surface" /></div>
             {loginError && <p className="rounded-xl bg-red-50 px-3 py-2 text-sm font-bold text-red-700">{loginError}</p>}
             <Button disabled={loginPending} className="h-12 w-full rounded-2xl text-[0.98rem] font-bold" type="submit">{loginPending ? "Please wait…" : creatingAccount ? "Create account" : "Enter laundry room"} <LogIn className="size-4" /></Button>
             <button type="button" className="w-full text-center text-sm font-bold text-primary" onClick={() => { setCreatingAccount((current) => !current); setLoginError(""); }}>
-              {creatingAccount ? "Already have an account? Sign in" : "New here? Create a prototype account"}
+              {creatingAccount ? "Already have an account? Sign in" : "New here? Create an RC4 account"}
             </button>
-            <p className="text-center text-xs leading-5 text-muted-foreground">{creatingAccount ? "Prototype accounts stay on this test device." : "Try tessa / prototype."}</p>
+            <p className="text-center text-xs leading-5 text-muted-foreground">Your account works across devices. All RC4 residents share the same four machines.</p>
           </form>
         </div>
       </main>
@@ -146,11 +147,13 @@ export function ResidentApp() {
           </div>
         </header>
 
+        {backendError && <p role="alert" className="m-5 rounded-2xl bg-red-50 p-4 text-sm text-red-800">Could not connect to the RC4 booking system. {backendError} Reservations are unavailable until the connection returns.</p>}
+        {!ready && !backendError && <p className="px-5 py-3 text-sm">Connecting to RC4…</p>}
         {view === "home" && (
           <div className="animate-float-in">
             <section className="px-5 pt-4 sm:px-0">
               <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
-                <div><p className="text-sm font-bold text-primary">Saturday, 3 October</p><h1 className="mt-1 text-[2.25rem] font-black leading-tight tracking-[-0.055em] sm:text-5xl">Good afternoon, {username.charAt(0).toUpperCase() + username.slice(1)}.</h1><p className="mt-2 text-base text-muted-foreground">What works for your schedule today?</p></div>
+                <div><p className="text-sm font-bold text-primary">{new Intl.DateTimeFormat("en-SG", { timeZone: "Asia/Singapore", weekday: "long", day: "numeric", month: "long" }).format(new Date())}</p><h1 className="mt-1 text-[2.25rem] font-black leading-tight tracking-[-0.055em] sm:text-5xl">Good afternoon, {username.charAt(0).toUpperCase() + username.slice(1)}.</h1><p className="mt-2 text-base text-muted-foreground">What works for your schedule today?</p></div>
                 <div className="flex gap-2 rounded-2xl border bg-white p-2 text-sm shadow-sm"><span className="rounded-xl bg-mint px-3 py-2 font-bold text-emerald-900">{availableCount} available</span><span className="px-3 py-2 font-semibold text-muted-foreground">RC4 · Level 1</span></div>
               </div>
             </section>
@@ -158,16 +161,16 @@ export function ResidentApp() {
             <YourLaundry state={state} showBookings={showBookings} showQueue={showQueue} />
 
             <section className="grid gap-3 px-5 pt-7 sm:grid-cols-2 sm:px-0">
-              <button onClick={() => setBookingOpen(true)} className="group relative overflow-hidden rounded-[28px] bg-primary p-6 text-left text-white shadow-[0_18px_42px_rgba(47,77,255,0.24)] transition-transform hover:-translate-y-0.5">
+              <button disabled={!ready} onClick={() => setBookingOpen(true)} className="group relative overflow-hidden rounded-[28px] bg-primary p-6 text-left text-white shadow-[0_18px_42px_rgba(47,77,255,0.24)] transition-transform hover:-translate-y-0.5">
                 <CalendarDays className="mb-9 size-7" /><p className="text-2xl font-black tracking-[-0.04em]">Book a time</p><p className="mt-1 text-sm text-white/70">Plan washing, drying, or both.</p><ChevronRight className="absolute bottom-6 right-6 size-6 transition-transform group-hover:translate-x-1" /><div className="absolute -right-12 -top-16 size-44 rounded-full border-[24px] border-white/10" />
               </button>
-              <button onClick={() => setQueueOpen(true)} className="group relative overflow-hidden rounded-[28px] bg-lime p-6 text-left text-ink shadow-[0_18px_42px_rgba(153,202,62,0.2)] transition-transform hover:-translate-y-0.5">
+              <button disabled={!ready} onClick={() => setQueueOpen(true)} className="group relative overflow-hidden rounded-[28px] bg-lime p-6 text-left text-ink shadow-[0_18px_42px_rgba(153,202,62,0.2)] transition-transform hover:-translate-y-0.5">
                 <ListOrdered className="mb-9 size-7" /><p className="text-2xl font-black tracking-[-0.04em]">Join the queue</p><p className="mt-1 text-sm text-ink/65">Get the next free machine.</p><ChevronRight className="absolute bottom-6 right-6 size-6 transition-transform group-hover:translate-x-1" /><div className="absolute -bottom-20 -right-7 size-44 rounded-full border-[24px] border-ink/7" />
               </button>
             </section>
 
             <section className="px-5 pb-28 pt-8 sm:px-0 sm:pb-12">
-              <div className="mb-4 flex items-center justify-between"><div><p className="text-xl font-black tracking-[-0.035em]">Laundry room status</p><p className="text-sm text-muted-foreground">Updated just now</p></div><Button variant="ghost" onClick={() => setView("queue")} className="rounded-xl text-primary">View all</Button></div>
+              <div className="mb-4 flex items-center justify-between"><div><p className="text-xl font-black tracking-[-0.035em]">Laundry room status</p><p className="text-sm text-muted-foreground">{ready ? "Shared RC4 status · refreshes every 5 seconds" : "Connecting…"}</p></div><Button variant="ghost" onClick={() => setView("queue")} className="rounded-xl text-primary">View all</Button></div>
               <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
                 {state.machines.map((machine) => {
                   return (
@@ -185,17 +188,18 @@ export function ResidentApp() {
 
         {view === "bookings" && (
           <section className="animate-float-in px-5 pb-28 pt-5 sm:px-0 sm:pb-12">
-            <div className="flex items-end justify-between"><div><p className="text-sm font-bold text-primary">Your plans</p><h1 className="text-4xl font-black tracking-[-0.055em]">Bookings</h1></div><Button onClick={() => setBookingOpen(true)} className="rounded-2xl">New booking</Button></div>
+            <div className="flex items-end justify-between"><div><p className="text-sm font-bold text-primary">Your plans</p><h1 className="text-4xl font-black tracking-[-0.055em]">Bookings</h1></div><Button disabled={!ready} onClick={() => setBookingOpen(true)} className="rounded-2xl">New booking</Button></div>
             <div className="mt-7 grid gap-4 md:grid-cols-2">
               {state.bookings.length === 0 ? (
-                <div className="col-span-full rounded-[28px] border border-dashed bg-white p-9 text-center"><CalendarDays className="mx-auto size-8 text-primary" /><p className="mt-4 text-xl font-black">Nothing choped yet</p><p className="mt-2 text-sm text-muted-foreground">Reserve a washer, dryer, or both for the next 14 days.</p><Button className="mt-5 rounded-2xl" onClick={() => setBookingOpen(true)}>Book a time</Button></div>
+                <div className="col-span-full rounded-[28px] border border-dashed bg-white p-9 text-center"><CalendarDays className="mx-auto size-8 text-primary" /><p className="mt-4 text-xl font-black">Nothing choped yet</p><p className="mt-2 text-sm text-muted-foreground">Reserve a washer, dryer, or both for the next 14 days.</p><Button className="mt-5 rounded-2xl" disabled={!ready} onClick={() => setBookingOpen(true)}>Book a time</Button></div>
               ) : state.bookings.map((booking) => (
                 <Card key={booking.id} className="rounded-[28px] border-white bg-white p-5 shadow-[0_12px_36px_rgba(28,39,76,0.08)]">
-                  <div className="flex items-start justify-between"><Badge className="rounded-full bg-mint text-emerald-900 hover:bg-mint">{booking.status === "checked-in" ? "In progress" : "Confirmed"}</Badge><span className="text-sm font-bold text-muted-foreground">{booking.duration} min</span></div>
+                  <div className="flex items-start justify-between"><Badge className="rounded-full bg-mint text-emerald-900 hover:bg-mint">{booking.status === "checked-in" ? "In progress" : booking.status}</Badge><span className="text-sm font-bold text-muted-foreground">{booking.duration} min</span></div>
                   <p className="mt-6 text-2xl font-black capitalize tracking-[-0.04em]">{booking.kind === "both" ? "Wash + dry" : booking.kind}</p>
                   <p className="mt-2 font-bold">{booking.dateLabel} · {booking.startTime}</p>
                   {booking.dryerTime && <p className="mt-1 text-sm text-muted-foreground">Suggested dryer at {booking.dryerTime}</p>}
-                  <Link href={`/check-in?booking=${booking.id}`} className={cn(buttonVariants({ variant: "outline" }), "mt-6 h-11 w-full rounded-2xl")}><QrCode className="size-4" /> Check in downstairs</Link>
+                  {booking.status === "confirmed" && <><Link href={`/check-in?booking=${booking.id}`} className={cn(buttonVariants({ variant: "outline" }), "mt-6 h-11 w-full rounded-2xl")}><QrCode className="size-4" /> Check in downstairs</Link><Button variant="ghost" className="mt-2 w-full" onClick={async () => { if (!window.confirm("Cancel this reservation? Any upcoming dryer in the same reservation will also be cancelled.")) return; try { await cancelBooking(booking.id); toast.success("Reservation cancelled"); } catch (error) { toast.error(error instanceof Error ? error.message : "Cancellation failed"); } }}>Cancel reservation</Button></>}
+                  {booking.status === "checked-in" && booking.startedAt && Date.parse(state.serverTime ?? "") >= Date.parse(booking.startedAt) + booking.duration * 60000 && <Button className="mt-6 w-full rounded-2xl" onClick={async () => { try { await collectBooking(booking.id); toast.success("Machine released. Thank you!"); } catch (error) { toast.error(error instanceof Error ? error.message : "Collection failed"); } }}>I’ve collected my laundry</Button>}
                 </Card>
               ))}
             </div>
@@ -216,7 +220,7 @@ export function ResidentApp() {
         </nav>
       </div>
 
-      <BookingFlow open={bookingOpen} onOpenChange={setBookingOpen} onConfirm={addBooking} />
+      <BookingFlow open={bookingOpen} onOpenChange={setBookingOpen} onConfirm={addBooking} state={state} />
       <QueueFlow open={queueOpen} onOpenChange={setQueueOpen} state={state} onJoin={joinQueue} onLeave={leaveQueue} />
       <Sheet open={notificationsOpen} onOpenChange={setNotificationsOpen}>
         <SheetContent side="right" className="w-full overflow-y-auto rounded-l-[28px] sm:max-w-[460px]">
@@ -228,7 +232,7 @@ export function ResidentApp() {
         <SheetContent side="right" className="w-full overflow-y-auto rounded-l-[28px] sm:max-w-[420px]">
           <SheetHeader className="border-b px-6 pb-5 pt-7"><SheetTitle className="text-3xl font-black tracking-tight">App options</SheetTitle><SheetDescription>Quick access and updates, your way.</SheetDescription></SheetHeader>
           <div className="space-y-4 p-5"><InstallApp /><Button variant="outline" className="h-12 w-full justify-start rounded-2xl" onClick={() => { setOptionsOpen(false); setNotificationsOpen(true); }}><Bell className="size-4" />Notification preferences</Button>
-            <button onClick={() => { window.localStorage.removeItem("chopewash-session"); setSignedIn(false); }} className="flex w-full items-center gap-2 rounded-2xl px-4 py-3 text-left text-sm font-bold text-muted-foreground hover:bg-surface"><LogOut className="size-4" /> Sign out</button>
+            <button onClick={() => { void (async () => { try { await disconnectPush(); await getSupabaseClient()?.auth.signOut({ scope: "local" }); } catch { toast.error("Could not sign out safely. Please try again."); } })(); }} className="flex w-full items-center gap-2 rounded-2xl px-4 py-3 text-left text-sm font-bold text-muted-foreground hover:bg-surface"><LogOut className="size-4" /> Sign out</button>
           </div>
         </SheetContent>
       </Sheet>

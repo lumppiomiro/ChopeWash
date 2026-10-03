@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { addDays, format } from "date-fns";
 import { CalendarDays, Check, Clock3, Droplets, Sparkles } from "lucide-react";
 import { toast } from "sonner";
-import type { Booking } from "@/lib/demo-store";
+import type { Booking, LaundryState } from "@/lib/laundry-store";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -18,7 +18,7 @@ import {
 
 type BookingKind = Booking["kind"];
 
-const startTimes = ["08:00", "08:15", "08:30", "09:00", "09:15", "10:00", "10:30", "11:15", "13:00", "14:30", "17:15", "19:00"];
+const startTimes = Array.from({ length: 96 }, (_, index) => `${String(Math.floor(index / 4)).padStart(2, "0")}:${String(index % 4 * 15).padStart(2, "0")}`);
 
 function addMinutes(time: string, minutes: number) {
   const [hour, minute] = time.split(":").map(Number);
@@ -30,12 +30,15 @@ export function BookingFlow({
   open,
   onOpenChange,
   onConfirm,
+  state,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onConfirm: (booking: Booking) => void;
+  onConfirm: (booking: Booking) => Promise<void>;
+  state: LaundryState;
 }) {
-  const dates = useMemo(() => Array.from({ length: 14 }, (_, index) => addDays(new Date(), index)), []);
+  const singaporeDate = state.serverTime ? new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Singapore", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(state.serverTime)) : "2000-01-01";
+  const dates = useMemo(() => Array.from({ length: 14 }, (_, index) => addDays(new Date(`${singaporeDate}T12:00:00`), index)), [singaporeDate]);
   const [kind, setKind] = useState<BookingKind>("both");
   const [dateIndex, setDateIndex] = useState(0);
   const [duration, setDuration] = useState<30 | 45 | 60>(45);
@@ -44,7 +47,17 @@ export function BookingFlow({
   const selectedDate = dates[dateIndex];
   const dryerTime = addMinutes(startTime, duration + 15);
 
-  const confirm = () => {
+  const [pending, setPending] = useState(false);
+  const unavailable = (time: string) => {
+    const start = Date.parse(`${format(selectedDate, "yyyy-MM-dd")}T${time}:00+08:00`);
+    const segments = kind === "both" ? [{ id: "washer-book", start }, { id: "dryer-book", start: start + (duration + 15) * 60000 }] : [{ id: kind === "dry" ? "dryer-book" : "washer-book", start }];
+    return !state.intervals || start <= Date.parse(state.serverTime ?? "") || (kind === "both" && dateIndex === 13 && startTimes.indexOf(time) * 15 + duration + 15 >= 1440) || segments.some(segment =>
+      state.machines.some(m => m.id === segment.id && m.status === "offline") ||
+      state.intervals?.some(slot => slot.machineId === segment.id && segment.start < Date.parse(slot.endsAt) && segment.start + (duration + 15) * 60000 > Date.parse(slot.startsAt)));
+  };
+  const confirm = async () => {
+    setPending(true);
+    try {
     const booking: Booking = {
       id: crypto.randomUUID(),
       kind,
@@ -55,9 +68,11 @@ export function BookingFlow({
       dryerTime: kind === "both" ? dryerTime : undefined,
       status: "confirmed",
     };
-    onConfirm(booking);
+    await onConfirm(booking);
     setConfirmed(true);
     toast.success("Laundry time reserved", { description: `${booking.dateLabel} at ${booking.startTime}` });
+    } catch (error) { toast.error(error instanceof Error ? error.message : "Could not reserve this slot."); }
+    finally { setPending(false); }
   };
 
   return (
@@ -127,11 +142,11 @@ export function BookingFlow({
               <fieldset>
                 <legend className="mb-3 text-sm font-extrabold">4. Start time</legend>
                 <div className="grid grid-cols-4 gap-2">
-                  {startTimes.map((time, index) => {
-                    const unavailable = [2, 7, 10].includes(index);
+                  {startTimes.map((time) => {
+                    const taken = unavailable(time);
                     return (
-                      <button key={time} disabled={unavailable} onClick={() => setStartTime(time)} className={`h-11 rounded-xl border text-sm font-bold transition disabled:cursor-not-allowed disabled:bg-surface disabled:text-muted-foreground/45 ${startTime === time ? "border-ink bg-ink text-white" : "bg-white hover:bg-surface"}`}>
-                        {unavailable ? "Taken" : time}
+                      <button key={time} disabled={taken || pending} onClick={() => setStartTime(time)} className={`h-11 rounded-xl border text-sm font-bold transition disabled:cursor-not-allowed disabled:bg-surface disabled:text-muted-foreground/45 ${startTime === time ? "border-ink bg-ink text-white" : "bg-white hover:bg-surface"}`}>
+                        {time}
                       </button>
                     );
                   })}
@@ -142,14 +157,14 @@ export function BookingFlow({
                 <div className="rounded-[22px] border border-primary/15 bg-secondary p-4">
                   <div className="flex items-start gap-3">
                     <div className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary text-white"><Sparkles className="size-5" /></div>
-                    <div><p className="font-extrabold">Dryer suggestion: {dryerTime}</p><p className="mt-1 text-sm leading-5 text-muted-foreground">Includes a 15-minute buffer to move your laundry.</p></div>
+                    <div><p className="font-extrabold">Dryer reservation: {dryerTime}</p><p className="mt-1 text-sm leading-5 text-muted-foreground">Reserves both machines together, with a 15-minute transfer buffer.</p></div>
                   </div>
                 </div>
               )}
             </div>
             <SheetFooter className="sticky bottom-0 border-t bg-white/95 p-5 backdrop-blur">
-              <Button className="h-12 rounded-2xl text-base font-extrabold" onClick={confirm}>Confirm booking</Button>
-              <p className="text-center text-xs text-muted-foreground">You can check in up to 15 minutes after the start time.</p>
+              <Button disabled={pending || unavailable(startTime)} className="h-12 rounded-2xl text-base font-extrabold" onClick={() => void confirm()}>{pending ? "Reserving…" : "Confirm booking"}</Button>
+              <p className="text-center text-xs text-muted-foreground">Check in within 15 minutes of each slot. Slots include the grace period; all times are Singapore time.</p>
             </SheetFooter>
           </>
         )}

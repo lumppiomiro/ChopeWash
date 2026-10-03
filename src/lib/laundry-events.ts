@@ -1,4 +1,4 @@
-import type { DemoState } from "./demo-store";
+import type { LaundryState } from "./laundry-store";
 import { isActiveQueue, queueTarget } from "./queue-state";
 
 export type LaundryEvent = {
@@ -21,10 +21,10 @@ export function countdown(target: number, now: number) {
   return `${String(Math.floor(seconds / 3600)).padStart(2, "0")}:${String(Math.floor(seconds % 3600 / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
 }
 
-export function getLaundryEvents(state: DemoState, now: number): LaundryEvent[] {
+export function getLaundryEvents(state: LaundryState, now: number): LaundryEvent[] {
   const events: LaundryEvent[] = [];
   for (const booking of state.bookings) {
-    if (booking.status === "complete") continue;
+    if (!["confirmed", "checked-in"].includes(booking.status)) continue;
     // RC4 reservations always use Singapore time, regardless of the viewer's timezone.
     const starts = Date.parse(`${booking.dateIso}T${booking.startTime}:00+08:00`);
     if (!Number.isFinite(starts)) continue;

@@ -1,4 +1,4 @@
-import type { DemoState } from "./demo-store";
+import type { LaundryState } from "./laundry-store";
 
 export type NoticeGroup = "bookings" | "queue" | "cycles";
 export type LaundryNotice = {
@@ -7,7 +7,7 @@ export type LaundryNotice = {
 };
 
 const MINUTE = 60_000;
-export function notificationEvents(state: DemoState, now: number): LaundryNotice[] {
+export function notificationEvents(state: LaundryState, now: number): LaundryNotice[] {
   const events: LaundryNotice[] = [];
   const cycle = (id: string, title: string, ends: number, view: LaundryNotice["view"], started?: number) => {
     if (!Number.isFinite(ends)) return;

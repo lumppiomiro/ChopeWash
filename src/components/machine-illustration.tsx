@@ -1,5 +1,5 @@
 import { useId } from "react";
-import type { MachineKind, MachineStatus } from "@/lib/demo-store";
+import type { MachineKind, MachineStatus } from "@/lib/laundry-store";
 
 export function MachineIllustration({ kind, status }: { kind: MachineKind; status: MachineStatus }) {
   const id = useId().replace(/:/g, "");

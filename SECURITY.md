@@ -1,26 +1,34 @@
-# Security and team setup
+# Security and pilot boundaries
 
-ChopeWash is a public usability-test prototype. Use fictional test data only.
+The shared-backend version uses Supabase password authentication and owner-checked PostgreSQL functions. Use fictional pilot data until the deployed settings and policies are verified.
 
-## Credentials
+## Secrets
 
-- Keep values in `.env.local` locally and Vercel Environment Variables for deployments. Commit only the empty `.env.example`.
-- `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` are intended to be visible to browsers. A legacy anon key is also supported.
-- Never put Supabase secret/service-role keys, JWT signing secrets, database passwords/URLs, GitHub tokens, or private keys in source files or any `NEXT_PUBLIC_` variable.
-- The Next.js configuration rejects recognizable privileged Supabase keys, private keys, and database credentials in public variables before bundling. This is a guardrail, not a complete secret scanner.
-- Enable GitHub secret scanning and push protection under the repository's security settings. Review changes before merging, including config files and screenshots.
-- If a credential is committed, revoke/rotate it immediately in its provider. Deleting the file in a later commit does not remove it from history. Coordinate any history rewrite with the team.
+Only the Supabase URL, publishable/anon key and VAPID **public** key belong in public browser variables. Service-role keys, VAPID private keys, cron tokens, signing secrets and database passwords must stay in ignored `.env.local` or private Vercel/Vault settings. Never commit them or expose them in screenshots. The committed `.env.example` contains empty values.
 
-## Prototype boundaries
+The dispatcher reads secrets only in its server route. Next.js configuration rejects recognizable privileged secrets in public variables. Enable GitHub secret scanning/push protection; rotate any leaked secret immediately. Removing a later file does not erase Git history.
 
-- `tessa / prototype` and `miro / 1234` are public demonstration credentials, not protected accounts. Do not reuse these passwords for real accounts.
-- Device-local prototype accounts and the localStorage session are not secure authentication. Bookings and queues are stored in that browser and are not isolated by username.
-- `/ops` is an unauthenticated simulator route. Hiding it from navigation does not restrict access. Its controls currently modify browser-local demo data, not Supabase machine data.
-- Before connecting real resident data or shared machine control, enforce Supabase authentication and authorization on the backend, isolate user records, and restrict operator actions.
-- `supabase/schema.sql` enables Row Level Security on the supplied tables. Inspect the policies in the actual Supabase project before storing real data; the SQL file alone does not verify the deployed database. In particular, resident profile updates must not allow changing the operator role.
+## Authorization
 
-## Audit record
+- Demo passwords and localStorage session flags no longer grant access.
+- Residents cannot write machine, booking, queue or role tables directly. RPCs derive ownership from `auth.uid()`, not supplied user IDs.
+- Machine locks serialize the small shared RC4 ledger. Exclusion constraints independently prevent overlap, and paired reservations commit together.
+- Public snapshots expose machine state, queue counts and anonymous occupied intervals. Personal records and inboxes are owner-only.
+- Operator checks run in SQL. Residents cannot change their own role. Role grants require an explicitly approved account.
+- Legacy records are preserved while their prototype API grants are revoked.
+- Push subscriptions have owner-only RLS. Internal scheduler/dispatch functions are limited to the service role.
+- The push worker requires a private token, leases events, checks expiry and restricts destination hosts.
 
-On 4 October 2026, the fetched Git history (6 commits, 73 unique file blobs) and the public home page's 11 JavaScript assets were checked for common credential patterns. No privileged credentials were detected. The live browser bundle contained one Supabase publishable key, which is expected. The only environment file in Git history was the empty `.env.example`.
+## Prototype limits
 
-This check did not audit GitHub issues, pull requests, Actions logs/artifacts, or private Vercel/Supabase settings and database policies. Pattern scans cannot prove the absence of every possible secret.
+Username signup with synthetic addresses does not verify RC4 residency or offer email recovery. Do not reuse important passwords. QR codes are navigation, not proof of physical presence. Machines are not controlled or sensed; check-in and collection are user-reported. Delayed collection can block the next booking.
+
+Scheduler/VAPID setup and real-device push tests are separate requirements; committed code does not prove they are live. Public signup and anonymous polling need abuse/rate-limit review before broader deployment.
+
+## Verification
+
+The earlier source/history and public-bundle check found no privileged credentials. That pattern-based audit did not prove every possible secret absent or inspect all external artifacts.
+
+Local PostgreSQL tests cover overlap, paired atomicity, simultaneous competitors, FIFO, ownership, grace expiry, collection, private snapshots and authorization. Deployment must separately verify migration execution, account configuration and scheduled push.
+
+The existing shadcn generator was moved to development dependencies without changing its version. Runtime dependency audit reported zero advisories. Development-tool advisories remain and should be reviewed separately rather than applying forced major upgrades.

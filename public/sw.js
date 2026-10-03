@@ -1,6 +1,15 @@
 /* No page caching: bookings and queue state must not be served as stale snapshots. */
 self.addEventListener("install", () => self.skipWaiting());
 self.addEventListener("activate", (event) => event.waitUntil(self.clients.claim()));
+self.addEventListener("push", (event) => {
+  if (!event.data) return;
+  let notice;
+  try { notice = event.data.json(); } catch { return; }
+  event.waitUntil(self.registration.showNotification(notice.title || "ChopeWash", {
+    body: notice.body || "", icon: "/icons/app-192.png", badge: "/icons/app-192.png",
+    tag: notice.id || "chopewash-update", data: { url: notice.url || "/" },
+  }));
+});
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
   const path = event.notification.data?.url || "/";

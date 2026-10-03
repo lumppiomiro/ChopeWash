@@ -11,22 +11,22 @@ export function NotificationCentre({ notifications, navigate, openOptions }: { n
   const [message, setMessage] = useState("");
   const enable = async () => {
     setPending(true); setMessage("");
-    try { await notifications.enableDevice(); setMessage("Device alerts enabled while ChopeWash is running."); }
+    try { await notifications.enableDevice(); setMessage("Device alerts enabled. Background delivery requires the RC4 scheduler to be configured."); }
     catch (error) { setMessage(error instanceof Error ? error.message : "Could not enable device alerts."); }
     finally { setPending(false); }
   };
   const test = async () => {
-    try { await deviceNotice({ id: "chopewash-test", title: "ChopeWash alerts are ready", body: "Your booking and queue updates will appear here while the app is running.", view: "queue" }); setMessage("Test alert sent. Your phone or browser may silence it based on its settings."); }
+    try { await deviceNotice({ id: "chopewash-test", title: "ChopeWash alerts are ready", body: "Your booking and queue updates can appear here even when the app is closed.", view: "queue" }); setMessage("Test alert sent. Your phone or browser may silence it based on its settings."); }
     catch (error) { setMessage(error instanceof Error ? error.message : "Could not display the test alert."); }
   };
   const deviceEnabled = notifications.preferences.device && notifications.permission === "granted";
   return <div className="space-y-6 p-5">
-    <section className="rounded-[22px] border bg-surface p-4"><div className="flex items-start gap-3"><BellRing className="mt-1 size-5 shrink-0 text-primary" /><div><h3 className="font-extrabold">Stay in the loop</h3><p className="mt-1 text-xs leading-5 text-muted-foreground">Your booking, queue and cycle updates appear here automatically. Optional device alerts work while the app is running; alerts while it’s closed aren’t available yet.</p></div></div>
+    <section className="rounded-[22px] border bg-surface p-4"><div className="flex items-start gap-3"><BellRing className="mt-1 size-5 shrink-0 text-primary" /><div><h3 className="font-extrabold">Stay in the loop</h3><p className="mt-1 text-xs leading-5 text-muted-foreground">Your booking, queue and cycle updates appear here automatically. Optional Web Push can notify you even when the app is closed, once the RC4 backend scheduler is configured. Delivery depends on your device settings.</p></div></div>
       <div className="mt-4 flex flex-wrap gap-2">{deviceEnabled ? <><Button size="sm" variant="outline" onClick={() => void test()}>Send test alert</Button><Button size="sm" variant="ghost" onClick={() => notifications.setPreference("device", false)}>Turn device alerts off</Button></> : <Button size="sm" disabled={pending} onClick={() => void enable()}>{pending ? "Enabling…" : "Enable device alerts"}</Button>}<Button size="sm" variant="ghost" onClick={openOptions}>Install help</Button></div>
       {message && <p role="status" className="mt-3 text-xs leading-5 text-muted-foreground">{message}</p>}
     </section>
     <section aria-label="Notification preferences" className="space-y-4">{([
-      ["bookings", "Booking reminders", "10 minutes before, slot start and check-in deadline"],
+      ["bookings", "Booking reminders", "10 minutes before, slot start, deadline and missed check-in"],
       ["queue", "Queue updates", "Your turn, claim deadline and missed offers"],
       ["cycles", "Cycle updates", "5 minutes remaining and ready to collect"],
     ] as const).map(([name, title, detail]) => <div key={name} className="flex items-center justify-between gap-4"><div><label htmlFor={`notice-${name}`} className="text-sm font-bold">{title}</label><p className="mt-0.5 text-xs text-muted-foreground">{detail}</p></div><Switch id={`notice-${name}`} checked={notifications.preferences[name]} onCheckedChange={(checked) => notifications.setPreference(name, checked)} /></div>)}</section>

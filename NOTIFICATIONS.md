@@ -1,38 +1,34 @@
-# Installation and laundry updates
+# Installation and notifications
 
-Install ChopeWash from App options (the sliders button in the header). Supported browsers open their native install prompt; others show a platform-specific guide. iPhone installation uses the browser's Share menu. The manifest and PNG icons support Home Screen installation and standalone launch. The service worker does not cache laundry pages or claim offline functionality.
+Installation lives in App options. Supported browsers offer their native prompt; others receive a guide. iPhone installation uses the browser Share menu. The service worker does not cache laundry data or support offline reservations.
 
-## Notification plan
+## Shared inbox
 
-| Event | Message and action |
-| --- | --- |
-| Booking created | Confirmation with machine, date, time and paired dryer time |
-| Booking starts in 10 minutes | Prepare laundry; view booking |
-| Slot starts | Head downstairs; 15-minute check-in window |
-| 2 minutes left to check in | Last call; view booking |
-| Check-in window missed | Choose another slot |
-| Queue joined | Position confirmation; view queue |
-| First in line, current run has 5 minutes or less | Prepare, but wait for a confirmed offer |
-| Machine offered | Head downstairs; five-minute claim window |
-| 1 minute left to claim | Urgent reminder; view queue |
-| Offer expires | Join again when ready |
-| Queued machine goes offline | Check queue or leave |
-| Queue left | Confirm the place was released |
-| Cycle starts | Follow the timer on Home |
-| Cycle has 5 minutes remaining | Prepare to collect |
-| Cycle finishes | Collect laundry |
+The database stores owner-only, deduplicated notifications. Read status follows the account across devices. Category preferences filter the inbox and update the opted-in device's push preferences. New foreground events produce toasts; opening the app does not replay old alerts.
 
-An estimate reaching zero does not generate a machine-ready alert. Readiness requires an offered queue entry. The operator simulator can change availability and queue length to exercise this flow.
+Implemented events: reservation confirmation; ten minutes before start; slot start; two-minute check-in warning; missed booking; queue offer; one-minute claim warning; expired offer; cycle start; five minutes remaining; ready to collect.
 
-## Current delivery
+Successful join/leave/cancel actions also confirm directly in the UI. Estimates never generate a false machine-ready alert. Pending warnings are invalidated on check-in, cancellation or release.
 
-- A persistent, per-username notification inbox with unread counts, action links, and category preferences.
-- Toasts for new events while viewing the app. Initial loading and refreshes populate the inbox quietly; event IDs prevent repeated reminders. Only the current reminder stage is generated when returning after a long absence, rather than replaying every missed warning.
-- Optional system notifications when permission is granted and the page continues executing in the background. Enable and test these in Notifications. iPhone requires an installed Home Screen web app and supported OS/browser. Browser timers may be suspended, so this is not reliable delivery while closed or suspended.
-- No Web Push subscriptions or server scheduler are connected yet. Installation and notification permission alone do not enable closed-app alerts.
+## Closed-app Web Push setup
 
-## Background delivery follow-up
+These additional steps are required beyond installation/permission:
 
-Move booking/queue ownership and timestamps from localStorage into authenticated Supabase records. Store each user's opted-in Web Push subscription with RLS, generate server-side scheduled/event-based notifications, and send Web Push from a backend worker using server-only VAPID credentials. Use stable event IDs, expiry times, and cancellation checks so a user who leaves or checks in never receives stale reminders. Add service-worker push handling and notification-click routing, then validate on physical iOS and Android devices. A cron job's frequency must be sufficient for the one-minute claim warning; a once-daily scheduler is insufficient.
+1. Generate a VAPID pair locally with `npx web-push generate-vapid-keys`. Never commit the private half or paste it into chat.
+2. Configure Vercel environment variables:
+   - `NEXT_PUBLIC_VAPID_PUBLIC_KEY`: public half, intentionally browser-visible.
+   - `VAPID_PRIVATE_KEY`: private/server-only.
+   - `VAPID_SUBJECT`: real project contact, such as a mailto address.
+   - `SUPABASE_SERVICE_ROLE_KEY`: privileged key for the correct Supabase project, server-only.
+   - `CRON_SECRET`: strong random scheduler token, server-only.
+3. Redeploy so the browser receives the public VAPID key.
+4. Enable Supabase Cron and its 30-second database tick from `supabase/scheduler.sql`.
+5. Enable pg_net. Create Vault secrets `rc4_push_url` (the production dispatch endpoint) and `rc4_cron_secret` (matching Vercel's token). Run the commented push scheduler block in that SQL file.
+6. Enable device alerts in Notifications on each test device. On iPhone, use the installed Home Screen app on a supported OS.
+7. Test an actual scheduled reminder/offer with the app closed on physical iOS and Android devices. A foreground test alert verifies display permission, not background scheduling.
 
-Do not expose an unauthenticated send-notification endpoint or upload browser demo state as trusted backend data.
+The POST-only worker requires the private bearer token. It leases batches, ignores expired notices, removes expired subscriptions and retries transient failures up to five attempts. Tags reduce duplicate alerts; delivery is best-effort, not exactly-once. The inbox and timers remain authoritative.
+
+Turning device alerts off removes the subscription. Sign-out also removes this device's subscription before ending the session. Allowed HTTPS browser-push providers are restricted to prevent arbitrary HTTP destinations.
+
+A once-daily cron is insufficient for five-minute queue offers. Verify Supabase Cron job logs. Do not expose an unauthenticated sender or treat local demo data as trusted backend records.

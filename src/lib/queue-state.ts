@@ -1,4 +1,4 @@
-import type { DemoState, Machine, MachineKind, QueueEntry } from "./demo-store";
+import type { LaundryState, Machine, MachineKind, QueueEntry } from "./laundry-store";
 
 export const isActiveQueue = (entry: QueueEntry) => ["waiting", "offered", "claimed"].includes(entry.status);
 export function queueTarget(entry: QueueEntry, machine?: Machine) {
@@ -6,7 +6,7 @@ export function queueTarget(entry: QueueEntry, machine?: Machine) {
   if (entry.status === "offered") return Date.parse(entry.offerExpiresAt ?? entry.joinedAt);
   return entry.estimatedReadyAt ? Date.parse(entry.estimatedReadyAt) : Date.parse(entry.joinedAt) + ((machine?.status === "running" ? machine.minutesLeft : 0) + Math.max(0, entry.position - 1) * 45) * 60_000;
 }
-export function joinQueueState(state: DemoState, kind: MachineKind, now: number, id: string) {
+export function joinQueueState(state: LaundryState, kind: MachineKind, now: number, id: string) {
   const existing = state.queueEntries.find((entry) => entry.kind === kind && isActiveQueue(entry));
   if (existing) return { state, entry: existing };
   const machine = state.machines.find((item) => item.kind === kind && item.mode === "queue");
@@ -15,19 +15,19 @@ export function joinQueueState(state: DemoState, kind: MachineKind, now: number,
   const entry: QueueEntry = { id, kind, position: machine.queueLength + 1, joinedAt: new Date(now).toISOString(), status: offered ? "offered" : "waiting", estimatedReadyAt: new Date(now + ((machine.status === "running" ? machine.minutesLeft : 0) + machine.queueLength * 45) * 60_000).toISOString(), offerExpiresAt: offered ? new Date(now + 5 * 60_000).toISOString() : undefined };
   return { entry, state: { ...state, queueEntries: [entry, ...state.queueEntries], machines: state.machines.map((item) => item.id === machine.id ? { ...item, queueLength: item.queueLength + 1 } : item) } };
 }
-export function leaveQueueState(state: DemoState, kind: MachineKind) {
+export function leaveQueueState(state: LaundryState, kind: MachineKind) {
   const removed = state.queueEntries.filter((entry) => entry.kind === kind && isActiveQueue(entry));
   if (!removed.length) return state;
   return { ...state, queueEntries: state.queueEntries.filter((entry) => !removed.some((item) => item.id === entry.id)), machines: state.machines.map((machine) => machine.kind === kind && machine.mode === "queue" ? { ...machine, status: removed.some((item) => item.status === "claimed") ? "available" as const : machine.status, minutesLeft: removed.some((item) => item.status === "claimed") ? 0 : machine.minutesLeft, queueLength: Math.max(0, machine.queueLength - removed.filter((item) => item.status !== "claimed").length) } : machine) };
 }
-export function claimQueueState(state: DemoState, id: string, duration: 30 | 45 | 60, now: number) {
+export function claimQueueState(state: LaundryState, id: string, duration: 30 | 45 | 60, now: number) {
   const entry = state.queueEntries.find((item) => item.id === id);
   const machine = state.machines.find((item) => item.kind === entry?.kind && item.mode === "queue");
   if (!entry || entry.status !== "offered" || queueTarget(entry, machine) <= now || machine?.status !== "available") throw new Error("This offer is no longer available. Return to the queue to check your status.");
   const cycleEndsAt = new Date(now + duration * 60_000).toISOString();
   return { ...state, queueEntries: state.queueEntries.map((item) => item.id === id ? { ...item, status: "claimed" as const, startedAt: new Date(now).toISOString(), cycleEndsAt } : item), machines: state.machines.map((item) => item.id === machine.id ? { ...item, status: "running" as const, minutesLeft: duration, queueLength: Math.max(0, item.queueLength - 1) } : item) };
 }
-export function advanceQueueState(state: DemoState, now: number) {
+export function advanceQueueState(state: LaundryState, now: number) {
   let next = state;
   // Earlier builds allowed the same resident to join a queue twice. Keep their earliest place.
   const kept = new Map<MachineKind, QueueEntry>();
