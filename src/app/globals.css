@@ -80,3 +80,18 @@
 }
 
 .animate-float-in { animation: float-in 420ms cubic-bezier(.2,.8,.2,1) both; }
+
+@keyframes machine-tumble {
+  to { transform: rotate(360deg); }
+}
+
+.machine-drum {
+  transform-origin: 106px 120px;
+  animation: machine-tumble 3.4s linear infinite;
+}
+
+.machine-drum-dryer { animation-duration: 5s; animation-direction: reverse; }
+
+@media (prefers-reduced-motion: reduce) {
+  .machine-drum, .animate-float-in { animation: none; }
+}

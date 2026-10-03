@@ -7,19 +7,18 @@ import {
   CalendarDays,
   ChevronRight,
   Clock3,
-  Droplets,
   ExternalLink,
   ListOrdered,
   LogIn,
   LogOut,
   QrCode,
   ScanLine,
-  Sparkles,
   WashingMachine,
 } from "lucide-react";
 import { Toaster } from "sonner";
 import { BookingFlow } from "@/components/booking-flow";
 import { BrandMark } from "@/components/brand-mark";
+import { MachineIllustration } from "@/components/machine-illustration";
 import { QueueFlow } from "@/components/queue-flow";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -156,13 +155,13 @@ export function ResidentApp() {
 
             <section className="px-5 pb-28 pt-8 sm:px-0 sm:pb-12">
               <div className="mb-4 flex items-center justify-between"><div><p className="text-xl font-black tracking-[-0.035em]">Laundry room status</p><p className="text-sm text-muted-foreground">Updated just now</p></div><Button variant="ghost" onClick={() => setView("queue")} className="rounded-xl text-primary">View all</Button></div>
-              <div className="grid gap-3 lg:grid-cols-4">
+              <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
                 {state.machines.map((machine) => {
-                  const Icon = machine.kind === "washer" ? Droplets : Sparkles;
                   return (
-                    <Card key={machine.id} className="gap-3 rounded-[24px] border-white bg-white p-4 shadow-[0_10px_30px_rgba(28,39,76,0.07)]">
-                      <div className="flex items-start justify-between"><div className="grid size-12 place-items-center rounded-2xl bg-surface text-primary"><Icon className="size-5" /></div><Badge variant="secondary" className={`rounded-full ${machine.status === "available" ? "bg-mint text-emerald-900" : machine.status === "offline" ? "bg-red-100 text-red-700" : "bg-secondary text-secondary-foreground"}`}>{statusLabel(machine.status, machine.minutesLeft)}</Badge></div>
-                      <div><p className="font-extrabold">{machine.name}</p><p className="text-sm text-muted-foreground">{machine.mode === "booking" ? "Booking machine" : `${machine.queueLength} in queue`}</p></div>
+                    <Card key={machine.id} className="gap-0 overflow-hidden rounded-[24px] border-white bg-white p-3 shadow-[0_10px_30px_rgba(28,39,76,0.07)] sm:p-4">
+                      <div className="flex justify-start"><Badge variant="secondary" className={`rounded-full text-xs ${machine.status === "available" ? "bg-mint text-emerald-900" : machine.status === "finished" ? "bg-amber-100 text-amber-900" : machine.status === "offline" ? "bg-surface text-muted-foreground" : "bg-secondary text-secondary-foreground"}`}>{statusLabel(machine.status, machine.minutesLeft)}</Badge></div>
+                      <div className={`mt-3 flex items-center justify-center rounded-2xl ${machine.kind === "washer" ? "bg-[#f1f4ff]" : "bg-[#fff5ee]"}`}><MachineIllustration kind={machine.kind} status={machine.status} /></div>
+                      <div className="pt-3"><p className="font-extrabold">{machine.name}</p><p className="mt-0.5 text-xs text-muted-foreground sm:text-sm">{machine.mode === "booking" ? "Booking machine" : `${machine.queueLength} in queue`}</p><p className="mt-2 flex items-center gap-1.5 text-xs font-semibold text-muted-foreground"><span className={`size-1.5 rounded-full ${machine.status === "available" ? "bg-emerald-500" : machine.status === "running" ? "bg-primary" : machine.status === "finished" ? "bg-amber-500" : "bg-slate-400"}`} />{machine.status === "running" ? machine.kind === "washer" ? "Washing" : "Drying" : machine.status === "available" ? "Ready to start" : machine.status === "finished" ? "Cycle complete" : "Out of service"}</p></div>
                     </Card>
                   );
                 })}
