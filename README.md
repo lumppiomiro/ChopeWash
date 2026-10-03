@@ -24,7 +24,7 @@ Open `http://localhost:3000`. The pre-filled prototype credentials are `tessa` /
 
 1. Create a Supabase project.
 2. Run `supabase/schema.sql` in the Supabase SQL editor.
-3. Copy `.env.example` to `.env.local` and add the project URL and anon key.
+3. Copy `.env.example` to `.env.local` and add the project URL and publishable key. Never commit `.env.local` or use a service-role/secret key in a public variable.
 4. Create pilot users with synthetic emails in the form `username@chopewash.rc4`; the UI converts usernames to this address before calling Supabase Auth.
 
 The schema includes profiles, dedicated booking/queue machines, collision-safe bookings, queue entries, RLS policies, and a machine-event table for future ESP32 integration. The current UI deliberately keeps its browser demo adapter until Supabase credentials are available.
@@ -41,3 +41,5 @@ The schema includes profiles, dedicated booking/queue machines, collision-safe b
 ## Deployment
 
 Import this repository into Vercel. Add the two Supabase environment variables in Vercel when the database is connected. No other build configuration is required.
+
+See [SECURITY.md](SECURITY.md) for safe team setup, credential handling, and the prototype's authentication limitations.
