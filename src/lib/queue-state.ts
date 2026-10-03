@@ -25,7 +25,7 @@ export function claimQueueState(state: DemoState, id: string, duration: 30 | 45 
   const machine = state.machines.find((item) => item.kind === entry?.kind && item.mode === "queue");
   if (!entry || entry.status !== "offered" || queueTarget(entry, machine) <= now || machine?.status !== "available") throw new Error("This offer is no longer available. Return to the queue to check your status.");
   const cycleEndsAt = new Date(now + duration * 60_000).toISOString();
-  return { ...state, queueEntries: state.queueEntries.map((item) => item.id === id ? { ...item, status: "claimed" as const, cycleEndsAt } : item), machines: state.machines.map((item) => item.id === machine.id ? { ...item, status: "running" as const, minutesLeft: duration, queueLength: Math.max(0, item.queueLength - 1) } : item) };
+  return { ...state, queueEntries: state.queueEntries.map((item) => item.id === id ? { ...item, status: "claimed" as const, startedAt: new Date(now).toISOString(), cycleEndsAt } : item), machines: state.machines.map((item) => item.id === machine.id ? { ...item, status: "running" as const, minutesLeft: duration, queueLength: Math.max(0, item.queueLength - 1) } : item) };
 }
 export function advanceQueueState(state: DemoState, now: number) {
   let next = state;

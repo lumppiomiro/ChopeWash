@@ -27,6 +27,7 @@ export type Booking = {
   dryerTime?: string;
   status: "confirmed" | "checked-in" | "complete";
   startedAt?: string;
+  createdAt?: string;
 };
 
 export type QueueEntry = {
@@ -38,6 +39,7 @@ export type QueueEntry = {
   estimatedReadyAt?: string;
   offerExpiresAt?: string;
   cycleEndsAt?: string;
+  startedAt?: string;
 };
 
 export type DemoState = {
@@ -93,7 +95,7 @@ export function useDemoStore() {
   }, []);
 
   const addBooking = useCallback((booking: Booking) => {
-    save((current) => ({ ...current, bookings: [booking, ...current.bookings] }));
+    save((current) => ({ ...current, bookings: [{ ...booking, createdAt: booking.createdAt ?? new Date().toISOString() }, ...current.bookings] }));
   }, [save]);
 
   const joinQueue = useCallback((kind: MachineKind) => {

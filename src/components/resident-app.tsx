@@ -12,7 +12,7 @@ import {
   LogIn,
   LogOut,
   QrCode,
-  ScanLine,
+  Settings2,
   WashingMachine,
 } from "lucide-react";
 import { Toaster } from "sonner";
@@ -32,6 +32,9 @@ import { useDemoStore } from "@/lib/demo-store";
 import { cn } from "@/lib/utils";
 import { createPrototypeAccount, signInWithUsername } from "@/lib/supabase";
 import { useChopeWashTools } from "@/lib/use-webmcp";
+import { useNotifications } from "@/lib/use-notifications";
+import { NotificationCentre } from "@/components/notification-centre";
+import { InstallApp } from "@/components/install-app";
 
 type View = "home" | "bookings" | "queue";
 
@@ -43,7 +46,7 @@ function statusLabel(status: string, minutes: number) {
 }
 
 export function ResidentApp() {
-  const { state, addBooking, joinQueue, leaveQueue } = useDemoStore();
+  const { state, ready, addBooking, joinQueue, leaveQueue } = useDemoStore();
   const [signedIn, setSignedIn] = useState(false);
   const [username, setUsername] = useState("tessa");
   const [creatingAccount, setCreatingAccount] = useState(false);
@@ -51,6 +54,7 @@ export function ResidentApp() {
   const [bookingOpen, setBookingOpen] = useState(false);
   const [queueOpen, setQueueOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [optionsOpen, setOptionsOpen] = useState(false);
   const [loginError, setLoginError] = useState("");
   const [loginPending, setLoginPending] = useState(false);
 
@@ -60,6 +64,8 @@ export function ResidentApp() {
     const timer = window.setTimeout(() => {
       setUsername(storedUsername);
       setSignedIn(true);
+      const linkedView = new URLSearchParams(window.location.search).get("view");
+      if (linkedView === "queue" || linkedView === "bookings") setView(linkedView);
     }, 0);
     return () => window.clearTimeout(timer);
   }, []);
@@ -67,6 +73,8 @@ export function ResidentApp() {
   const availableCount = useMemo(() => state.machines.filter((machine) => machine.status === "available").length, [state.machines]);
   const showQueue = useCallback(() => setView("queue"), []);
   const showBookings = useCallback(() => setView("bookings"), []);
+  const navigateFromNotice = useCallback((next: "bookings" | "queue") => { setView(next); setNotificationsOpen(false); }, []);
+  const notifications = useNotifications(state, ready && signedIn, username, navigateFromNotice);
   useChopeWashTools({ state, addBooking, joinQueue, showQueue, showBookings });
 
   const signIn = async (form: HTMLFormElement) => {
@@ -111,7 +119,7 @@ export function ResidentApp() {
             <button type="button" className="w-full text-center text-sm font-bold text-primary" onClick={() => { setCreatingAccount((current) => !current); setLoginError(""); }}>
               {creatingAccount ? "Already have an account? Sign in" : "New here? Create a prototype account"}
             </button>
-            <p className="text-center text-xs leading-5 text-muted-foreground">{creatingAccount ? "Prototype accounts stay on this test device." : "Try tessa / prototype or miro / 1234."}</p>
+            <p className="text-center text-xs leading-5 text-muted-foreground">{creatingAccount ? "Prototype accounts stay on this test device." : "Try tessa / prototype."}</p>
           </form>
         </div>
       </main>
@@ -131,9 +139,10 @@ export function ResidentApp() {
               ))}
             </nav>
             <Link href="/display" className="hidden h-11 items-center gap-2 rounded-2xl border bg-white px-4 text-sm font-bold shadow-sm lg:flex">Room display <ExternalLink className="size-4" /></Link>
-            <button onClick={() => setNotificationsOpen(true)} className="relative grid size-11 place-items-center rounded-2xl border bg-white shadow-sm" aria-label="Notifications">
-              <Bell className="size-5" /><span className="absolute right-2.5 top-2.5 size-2 rounded-full bg-coral ring-2 ring-white" />
+            <button onClick={() => setNotificationsOpen(true)} className="relative grid size-11 place-items-center rounded-2xl border bg-white shadow-sm" aria-label={`Notifications${notifications.unread ? `, ${notifications.unread} unread` : ""}`}>
+              <Bell className="size-5" />{notifications.unread > 0 && <span className="absolute -right-1 -top-1 grid min-w-5 place-items-center rounded-full bg-coral px-1 text-[10px] font-bold text-white ring-2 ring-white">{notifications.unread > 9 ? "9+" : notifications.unread}</span>}
             </button>
+            <button onClick={() => setOptionsOpen(true)} aria-label="App options" className="grid size-11 place-items-center rounded-2xl border bg-white shadow-sm"><Settings2 className="size-5" /></button>
           </div>
         </header>
 
@@ -210,11 +219,15 @@ export function ResidentApp() {
       <BookingFlow open={bookingOpen} onOpenChange={setBookingOpen} onConfirm={addBooking} />
       <QueueFlow open={queueOpen} onOpenChange={setQueueOpen} state={state} onJoin={joinQueue} onLeave={leaveQueue} />
       <Sheet open={notificationsOpen} onOpenChange={setNotificationsOpen}>
-        <SheetContent side="right" className="w-full rounded-l-[28px] sm:max-w-[420px]">
+        <SheetContent side="right" className="w-full overflow-y-auto rounded-l-[28px] sm:max-w-[460px]">
           <SheetHeader className="border-b px-6 pb-5 pt-7"><SheetTitle className="text-3xl font-black tracking-[-0.05em]">Notifications</SheetTitle><SheetDescription>Updates that need your attention.</SheetDescription></SheetHeader>
-          <div className="space-y-3 p-5">
-            <div className="rounded-[22px] bg-secondary p-4"><div className="flex gap-3"><ScanLine className="mt-0.5 size-5 text-primary" /><div><p className="font-extrabold">Ready to test check-in</p><p className="mt-1 text-sm leading-5 text-muted-foreground">Book a slot, then scan the room QR code from your booking.</p></div></div></div>
-            <div className="rounded-[22px] bg-surface p-4"><p className="font-extrabold">Dryer 01 has 12 minutes left</p><p className="mt-1 text-sm text-muted-foreground">Availability is simulated for this usability test.</p></div>
+          <NotificationCentre notifications={notifications} navigate={navigateFromNotice} openOptions={() => { setNotificationsOpen(false); setOptionsOpen(true); }} />
+        </SheetContent>
+      </Sheet>
+      <Sheet open={optionsOpen} onOpenChange={setOptionsOpen}>
+        <SheetContent side="right" className="w-full overflow-y-auto rounded-l-[28px] sm:max-w-[420px]">
+          <SheetHeader className="border-b px-6 pb-5 pt-7"><SheetTitle className="text-3xl font-black tracking-tight">App options</SheetTitle><SheetDescription>Quick access and updates, your way.</SheetDescription></SheetHeader>
+          <div className="space-y-4 p-5"><InstallApp /><Button variant="outline" className="h-12 w-full justify-start rounded-2xl" onClick={() => { setOptionsOpen(false); setNotificationsOpen(true); }}><Bell className="size-4" />Notification preferences</Button>
             <button onClick={() => { window.localStorage.removeItem("chopewash-session"); setSignedIn(false); }} className="flex w-full items-center gap-2 rounded-2xl px-4 py-3 text-left text-sm font-bold text-muted-foreground hover:bg-surface"><LogOut className="size-4" /> Sign out</button>
           </div>
         </SheetContent>

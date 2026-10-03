@@ -43,3 +43,5 @@ The schema includes profiles, dedicated booking/queue machines, collision-safe b
 Import this repository into Vercel. Add the two Supabase environment variables in Vercel when the database is connected. No other build configuration is required.
 
 See [SECURITY.md](SECURITY.md) for safe team setup, credential handling, and the prototype's authentication limitations.
+
+Installation is available from App options. The bell opens real booking/queue/cycle updates with category preferences and optional device alerts. See [NOTIFICATIONS.md](NOTIFICATIONS.md) for triggers, testing, and the current limitation: alerts while the app is closed require backend Web Push delivery, which is not connected yet.
