@@ -21,6 +21,7 @@ import { BrandMark } from "@/components/brand-mark";
 import { MachineIllustration } from "@/components/machine-illustration";
 import { YourLaundry } from "@/components/your-laundry";
 import { QueueFlow } from "@/components/queue-flow";
+import { QueueDashboard } from "@/components/queue-dashboard";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -42,7 +43,7 @@ function statusLabel(status: string, minutes: number) {
 }
 
 export function ResidentApp() {
-  const { state, addBooking, joinQueue } = useDemoStore();
+  const { state, addBooking, joinQueue, leaveQueue } = useDemoStore();
   const [signedIn, setSignedIn] = useState(false);
   const [username, setUsername] = useState("tessa");
   const [creatingAccount, setCreatingAccount] = useState(false);
@@ -194,19 +195,8 @@ export function ResidentApp() {
 
         {view === "queue" && (
           <section className="animate-float-in px-5 pb-28 pt-5 sm:px-0 sm:pb-12">
-            <p className="text-sm font-bold text-primary">Spontaneous laundry</p><h1 className="text-4xl font-black tracking-[-0.055em]">Live queue</h1><p className="mt-2 text-muted-foreground">Queue-only machines stay free from advance bookings.</p>
-            <div className="mt-7 grid gap-4 md:grid-cols-2">
-              {state.machines.filter((machine) => machine.mode === "queue").map((machine) => (
-                <Card key={machine.id} className="overflow-hidden rounded-[28px] border-white bg-white p-0 shadow-[0_12px_36px_rgba(28,39,76,0.08)]">
-                  <div className={`p-6 ${machine.status === "available" ? "bg-lime" : "bg-ink text-white"}`}>
-                    <div className="flex items-center justify-between"><p className="text-sm font-bold opacity-65">{machine.kind === "washer" ? "Washing" : "Drying"}</p><Badge className={machine.status === "available" ? "bg-white text-ink" : "bg-white/10 text-white"}>{statusLabel(machine.status, machine.minutesLeft)}</Badge></div>
-                    <p className="mt-10 text-3xl font-black tracking-[-0.05em]">{machine.name}</p>
-                  </div>
-                  <div className="flex items-center justify-between p-5"><div><p className="text-3xl font-black">{machine.queueLength}</p><p className="text-sm text-muted-foreground">people waiting</p></div><Button className="h-11 rounded-2xl" onClick={() => setQueueOpen(true)}>Join queue</Button></div>
-                </Card>
-              ))}
-            </div>
-            {state.queueEntries.length > 0 && <div className="mt-7 rounded-[24px] border border-primary/15 bg-secondary p-5"><p className="font-extrabold">You are #{state.queueEntries[0].position} for the {state.queueEntries[0].kind}.</p><p className="mt-1 text-sm text-muted-foreground">We’ll notify you when it is almost your turn.</p></div>}
+            <p className="text-sm font-bold text-primary">Spontaneous laundry</p><h1 className="text-4xl font-black tracking-[-0.055em]">Your next machine</h1><p className="mt-2 mb-7 text-muted-foreground">Join a queue, follow your turn, and head down when it’s ready.</p>
+            <QueueDashboard state={state} onJoin={joinQueue} onLeave={leaveQueue} />
           </section>
         )}
 
@@ -218,7 +208,7 @@ export function ResidentApp() {
       </div>
 
       <BookingFlow open={bookingOpen} onOpenChange={setBookingOpen} onConfirm={addBooking} />
-      <QueueFlow open={queueOpen} onOpenChange={setQueueOpen} onJoin={joinQueue} />
+      <QueueFlow open={queueOpen} onOpenChange={setQueueOpen} state={state} onJoin={joinQueue} onLeave={leaveQueue} />
       <Sheet open={notificationsOpen} onOpenChange={setNotificationsOpen}>
         <SheetContent side="right" className="w-full rounded-l-[28px] sm:max-w-[420px]">
           <SheetHeader className="border-b px-6 pb-5 pt-7"><SheetTitle className="text-3xl font-black tracking-[-0.05em]">Notifications</SheetTitle><SheetDescription>Updates that need your attention.</SheetDescription></SheetHeader>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { advanceQueueState, claimQueueState, joinQueueState, leaveQueueState } from "@/lib/queue-state";
 
 export type MachineKind = "washer" | "dryer";
 export type MachineMode = "booking" | "queue";
@@ -33,8 +34,10 @@ export type QueueEntry = {
   kind: MachineKind;
   position: number;
   joinedAt: string;
-  status: "waiting" | "offered" | "claimed";
+  status: "waiting" | "offered" | "claimed" | "expired";
   estimatedReadyAt?: string;
+  offerExpiresAt?: string;
+  cycleEndsAt?: string;
 };
 
 export type DemoState = {
@@ -94,27 +97,39 @@ export function useDemoStore() {
   }, [save]);
 
   const joinQueue = useCallback((kind: MachineKind) => {
-    const machine = state.machines.find((item) => item.kind === kind && item.mode === "queue");
-    const entry: QueueEntry = {
-      id: crypto.randomUUID(),
-      kind,
-      position: (machine?.queueLength ?? 0) + 1,
-      joinedAt: new Date().toISOString(),
-      status: "waiting",
-      estimatedReadyAt: new Date(Date.now() + ((machine?.minutesLeft ?? 0) + (machine?.queueLength ?? 0) * 45) * 60_000).toISOString(),
-    };
-    save((current) => ({
-      ...current,
-      queueEntries: [entry, ...current.queueEntries],
-      machines: current.machines.map((item) => item.id === machine?.id ? { ...item, queueLength: item.queueLength + 1 } : item),
-    }));
-    return entry;
-  }, [save, state.machines]);
+    const now = Date.now();
+    const id = crypto.randomUUID();
+    const result = joinQueueState(state, kind, now, id);
+    save((current) => joinQueueState(current, kind, now, id).state);
+    return result.entry;
+  }, [save, state]);
+
+  const leaveQueue = useCallback((kind: MachineKind) => save((current) => leaveQueueState(current, kind)), [save]);
+  const claimQueue = useCallback((id: string, duration: 30 | 45 | 60) => {
+    const now = Date.now();
+    claimQueueState(state, id, duration, now);
+    save((current) => claimQueueState(current, id, duration, now));
+  }, [save, state]);
+
+  useEffect(() => {
+    if (!ready) return;
+    const timer = window.setInterval(() => {
+      const next = advanceQueueState(state, Date.now());
+      if (next !== state) save((current) => advanceQueueState(current, Date.now()));
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [ready, save, state]);
 
   const updateMachine = useCallback((id: string, patch: Partial<Machine>) => {
     save((current) => ({
       ...current,
       machines: current.machines.map((machine) => machine.id === id ? { ...machine, ...patch } : machine),
+      queueEntries: current.queueEntries.map((entry) => {
+        const machine = current.machines.find((item) => item.id === id && item.mode === "queue" && item.kind === entry.kind);
+        if (!machine || entry.status !== "waiting" || patch.queueLength === undefined) return entry;
+        const passed = Math.max(0, machine.queueLength - Math.max(1, patch.queueLength));
+        return passed ? { ...entry, position: Math.max(1, entry.position - passed), estimatedReadyAt: new Date(Math.max(Date.now(), Date.parse(entry.estimatedReadyAt ?? entry.joinedAt) - passed * 45 * 60_000)).toISOString() } : entry;
+      }),
     }));
   }, [save]);
 
@@ -127,5 +142,5 @@ export function useDemoStore() {
 
   const reset = useCallback(() => save(defaultDemoState), [save]);
 
-  return { state, ready, addBooking, joinQueue, updateMachine, checkIn, reset };
+  return { state, ready, addBooking, joinQueue, leaveQueue, claimQueue, updateMachine, checkIn, reset };
 }

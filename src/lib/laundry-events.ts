@@ -1,4 +1,5 @@
 import type { DemoState } from "./demo-store";
+import { isActiveQueue, queueTarget } from "./queue-state";
 
 export type LaundryEvent = {
   id: string;
@@ -41,12 +42,13 @@ export function getLaundryEvents(state: DemoState, now: number): LaundryEvent[] 
     }
   }
   for (const entry of state.queueEntries) {
+    if (!isActiveQueue(entry)) continue;
     const machine = state.machines.find((item) => item.kind === entry.kind && item.mode === "queue");
-    const target = entry.estimatedReadyAt ? Date.parse(entry.estimatedReadyAt) : Date.parse(entry.joinedAt) + ((machine?.minutesLeft ?? 0) + Math.max(0, entry.position - 1) * 45) * MINUTE;
+    const target = queueTarget(entry, machine);
     if (!Number.isFinite(target)) continue;
     const offered = entry.status === "offered";
     const claimed = entry.status === "claimed";
-    events.push({ id: entry.id, title: `${machine?.name ?? entry.kind} · Queue #${entry.position}`, detail: claimed ? "Machine claimed · see your queue status" : `${Math.max(0, entry.position - 1)} ahead of you · wait times may change`, label: offered ? "Your machine is ready" : claimed ? "Your queue machine" : target > now ? "Estimated turn in" : "Waiting for the machine to be ready", target, action: "queue", active: offered || claimed });
+    events.push({ id: entry.id, title: `${machine?.name ?? entry.kind}${claimed ? "" : ` · Queue #${entry.position}`}`, detail: claimed ? "Your cycle · see your queue status" : offered ? "Head downstairs and check in to claim your machine" : `${Math.max(0, entry.position - 1)} ahead of you · wait times may change`, label: offered ? "Your machine is ready · claim within" : claimed ? target > now ? "Your cycle finishes in" : "Cycle finished · collect your laundry" : target > now ? "Estimated turn in" : "Waiting for the machine to be ready", target, action: "queue", active: offered || claimed, progress: claimed && target <= now ? 100 : undefined });
   }
   return events.sort((a, b) => Number(b.active) - Number(a.active) || a.target - b.target);
 }
