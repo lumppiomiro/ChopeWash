@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { requireSupabase, getSupabaseClient } from "@/lib/supabase";
+import type { BookingRequest } from "@/lib/booking-planner";
 
 export type MachineKind = "washer" | "dryer";
 export type MachineMode = "booking" | "queue";
@@ -101,7 +102,7 @@ export function useLaundryStore() {
     snapshotEpoch.current++;
     setState(next); setReady(true); return next;
   }, []);
-  const addBooking = useCallback(async (booking: Booking) => { await action("book", booking); }, [action]);
+  const addBooking = useCallback(async (booking: BookingRequest) => { await action("book", booking); }, [action]);
   const joinQueue = useCallback(async (kind: MachineKind) => {
     const next = await action("joinQueue", { kind });
     const entry = next.queueEntries.find(item => item.kind === kind && ["waiting", "offered", "claimed"].includes(item.status));

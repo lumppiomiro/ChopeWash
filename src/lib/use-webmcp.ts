@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect } from "react";
-import type { Booking, LaundryState, MachineKind, QueueEntry } from "@/lib/laundry-store";
+import type { LaundryState, MachineKind, QueueEntry } from "@/lib/laundry-store";
+import type { BookingRequest } from "@/lib/booking-planner";
 
 type ModelTool = {
   name: string;
@@ -24,7 +25,7 @@ export function useChopeWashTools({
   showBookings,
 }: {
   state: LaundryState;
-  addBooking: (booking: Booking) => Promise<void>;
+  addBooking: (booking: BookingRequest) => Promise<void>;
   joinQueue: (kind: MachineKind) => Promise<QueueEntry>;
   showQueue: () => void;
   showBookings: () => void;
@@ -66,7 +67,7 @@ export function useChopeWashTools({
     register({
       name: "create_laundry_booking",
       title: "Create a laundry booking",
-      description: "Create a 30, 45, or 60 minute shared RC4 booking and open the bookings view.",
+      description: "Reserve a fixed 30-minute wash, a 30/45/60-minute dry, or both with explicit independent dryer details.",
       inputSchema: {
         type: "object",
         properties: {
@@ -74,18 +75,18 @@ export function useChopeWashTools({
           dateIso: { type: "string" },
           startTime: { type: "string" },
           duration: { type: "integer", enum: [30, 45, 60] },
+          dryerDateIso: { type: "string" }, dryerTime: { type: "string" }, dryerDuration: { type: "integer", enum: [30, 45, 60] },
         },
         required: ["kind", "dateIso", "startTime", "duration"],
         additionalProperties: false,
       },
       annotations: { readOnlyHint: false, untrustedContentHint: false },
       execute: async (input) => {
-        const value = input as { kind?: unknown; dateIso?: unknown; startTime?: unknown; duration?: unknown };
+        const value = input as Partial<BookingRequest>;
         if (!(["wash", "dry", "both"] as unknown[]).includes(value.kind) || typeof value.dateIso !== "string" || typeof value.startTime !== "string" || !([30, 45, 60] as unknown[]).includes(value.duration)) throw new Error("Invalid booking details");
-        const booking: Booking = {
-          id: crypto.randomUUID(), kind: value.kind as Booking["kind"], dateIso: value.dateIso,
-          dateLabel: value.dateIso, startTime: value.startTime, duration: value.duration as Booking["duration"], status: "confirmed",
-        };
+        if (value.kind !== "dry" && value.duration !== 30) throw new Error("Washing is always 30 minutes.");
+        if (value.kind === "both" && (!value.dryerDateIso || !value.dryerTime || !value.dryerDuration)) throw new Error("Paired reservations require explicit dryer date, time and duration.");
+        const booking = value as BookingRequest;
         await addBooking(booking);
         showBookings();
         return { status: "confirmed", message: "Reserved in RC4. Read your bookings for server IDs." };

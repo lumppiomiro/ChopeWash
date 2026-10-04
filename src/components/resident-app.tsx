@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   Bell,
   CalendarDays,
@@ -16,7 +17,6 @@ import {
   WashingMachine,
 } from "lucide-react";
 import { toast, Toaster } from "sonner";
-import { BookingFlow } from "@/components/booking-flow";
 import { BrandMark } from "@/components/brand-mark";
 import { MachineIllustration } from "@/components/machine-illustration";
 import { YourLaundry } from "@/components/your-laundry";
@@ -51,7 +51,7 @@ export function ResidentApp() {
   const [username, setUsername] = useState("");
   const [creatingAccount, setCreatingAccount] = useState(false);
   const [view, setView] = useState<View>("home");
-  const [bookingOpen, setBookingOpen] = useState(false);
+  const router = useRouter();
   const [queueOpen, setQueueOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [optionsOpen, setOptionsOpen] = useState(false);
@@ -161,7 +161,7 @@ export function ResidentApp() {
             <YourLaundry state={state} showBookings={showBookings} showQueue={showQueue} />
 
             <section className="grid gap-3 px-5 pt-7 sm:grid-cols-2 sm:px-0">
-              <button disabled={!ready} onClick={() => setBookingOpen(true)} className="group relative overflow-hidden rounded-[28px] bg-primary p-6 text-left text-white shadow-[0_18px_42px_rgba(47,77,255,0.24)] transition-transform hover:-translate-y-0.5">
+              <button disabled={!ready} onClick={() => router.push("/book")} className="group relative overflow-hidden rounded-[28px] bg-primary p-6 text-left text-white shadow-[0_18px_42px_rgba(47,77,255,0.24)] transition-transform hover:-translate-y-0.5">
                 <CalendarDays className="mb-9 size-7" /><p className="text-2xl font-black tracking-[-0.04em]">Book a time</p><p className="mt-1 text-sm text-white/70">Plan washing, drying, or both.</p><ChevronRight className="absolute bottom-6 right-6 size-6 transition-transform group-hover:translate-x-1" /><div className="absolute -right-12 -top-16 size-44 rounded-full border-[24px] border-white/10" />
               </button>
               <button disabled={!ready} onClick={() => setQueueOpen(true)} className="group relative overflow-hidden rounded-[28px] bg-lime p-6 text-left text-ink shadow-[0_18px_42px_rgba(153,202,62,0.2)] transition-transform hover:-translate-y-0.5">
@@ -188,10 +188,10 @@ export function ResidentApp() {
 
         {view === "bookings" && (
           <section className="animate-float-in px-5 pb-28 pt-5 sm:px-0 sm:pb-12">
-            <div className="flex items-end justify-between"><div><p className="text-sm font-bold text-primary">Your plans</p><h1 className="text-4xl font-black tracking-[-0.055em]">Bookings</h1></div><Button disabled={!ready} onClick={() => setBookingOpen(true)} className="rounded-2xl">New booking</Button></div>
+            <div className="flex items-end justify-between"><div><p className="text-sm font-bold text-primary">Your plans</p><h1 className="text-4xl font-black tracking-[-0.055em]">Bookings</h1></div><Button disabled={!ready} onClick={() => router.push("/book")} className="rounded-2xl">New booking</Button></div>
             <div className="mt-7 grid gap-4 md:grid-cols-2">
               {state.bookings.length === 0 ? (
-                <div className="col-span-full rounded-[28px] border border-dashed bg-white p-9 text-center"><CalendarDays className="mx-auto size-8 text-primary" /><p className="mt-4 text-xl font-black">Nothing choped yet</p><p className="mt-2 text-sm text-muted-foreground">Reserve a washer, dryer, or both for the next 14 days.</p><Button className="mt-5 rounded-2xl" disabled={!ready} onClick={() => setBookingOpen(true)}>Book a time</Button></div>
+                <div className="col-span-full rounded-[28px] border border-dashed bg-white p-9 text-center"><CalendarDays className="mx-auto size-8 text-primary" /><p className="mt-4 text-xl font-black">Nothing choped yet</p><p className="mt-2 text-sm text-muted-foreground">Reserve a washer, dryer, or both for the next 14 days.</p><Button className="mt-5 rounded-2xl" disabled={!ready} onClick={() => router.push("/book")}>Book a time</Button></div>
               ) : state.bookings.map((booking) => (
                 <Card key={booking.id} className="rounded-[28px] border-white bg-white p-5 shadow-[0_12px_36px_rgba(28,39,76,0.08)]">
                   <div className="flex items-start justify-between"><Badge className="rounded-full bg-mint text-emerald-900 hover:bg-mint">{booking.status === "checked-in" ? "In progress" : booking.status}</Badge><span className="text-sm font-bold text-muted-foreground">{booking.duration} min</span></div>
@@ -220,7 +220,6 @@ export function ResidentApp() {
         </nav>
       </div>
 
-      <BookingFlow open={bookingOpen} onOpenChange={setBookingOpen} onConfirm={addBooking} state={state} />
       <QueueFlow open={queueOpen} onOpenChange={setQueueOpen} state={state} onJoin={joinQueue} onLeave={leaveQueue} />
       <Sheet open={notificationsOpen} onOpenChange={setNotificationsOpen}>
         <SheetContent side="right" className="w-full overflow-y-auto rounded-l-[28px] sm:max-w-[460px]">

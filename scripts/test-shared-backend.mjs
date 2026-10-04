@@ -10,7 +10,7 @@ function run(args, input) {
 }
 run(["exec", container, "createdb", "-U", "postgres", database]);
 const psql = ["exec", "-i", container, "psql", "-U", "postgres", "-d", database, "-v", "ON_ERROR_STOP=1"];
-for (const file of ["supabase/tests/bootstrap.sql", "supabase/migrations/202610040001_rc4_shared.sql", "supabase/tests/booking-system.sql"]) {
+for (const file of ["supabase/tests/bootstrap.sql", "supabase/migrations/202610040001_rc4_shared.sql", "supabase/migrations/202610040002_booking_redesign.sql", "supabase/tests/booking-system.sql", "supabase/tests/booking-redesign.sql"]) {
   console.log(file, run(psql, readFileSync(file, "utf8")));
 }
 const query = (sql) => new Promise(resolve => {
@@ -19,7 +19,7 @@ const query = (sql) => new Promise(resolve => {
   process.on("exit", code => resolve({ code, output }));
 });
 run([...psql, "-c", "insert into auth.users values ('00000000-0000-0000-0000-000000000041','race-a@chopewash.rc4'),('00000000-0000-0000-0000-000000000042','race-b@chopewash.rc4');"]);
-const booking = "jsonb_build_object('kind','wash','dateIso',to_char(now()+interval '1 day','YYYY-MM-DD'),'startTime','16:00','duration',45)";
+const booking = "jsonb_build_object('kind','wash','dateIso',to_char(now()+interval '1 day','YYYY-MM-DD'),'startTime','16:00','duration',30)";
 const results = await Promise.all([41,42].map(id => query(`begin; select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-0000000000${id}',true); select rc4_action('book',${booking}); select pg_sleep(1); commit;`)));
 if (results.filter(result => result.code === 0).length !== 1 || !results.some(result => result.output.includes("Someone already reserved"))) throw new Error(JSON.stringify(results));
 console.log("PASS: simultaneous residents competing for the same slot yield exactly one successful reservation.");

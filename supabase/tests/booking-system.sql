@@ -11,7 +11,7 @@ declare
  snap jsonb; offer uuid; bid uuid; original_count integer; rejected boolean; booking jsonb;
 begin
  perform set_config('request.jwt.claim.sub',alice::text,true);
- booking:=jsonb_build_object('kind','both','dateIso',to_char(now()+interval '1 day','YYYY-MM-DD'),'startTime','12:00','duration',45);
+ booking:=jsonb_build_object('kind','both','dateIso',to_char(now()+interval '1 day','YYYY-MM-DD'),'startTime','12:00','duration',30,'dryerDateIso',to_char(now()+interval '1 day','YYYY-MM-DD'),'dryerTime','12:45','dryerDuration',45);
  snap:=rc4_action('book',booking);
  assert jsonb_array_length(snap->'bookings')=2,'paired reservation must reserve two machines';
  assert (select count(distinct pair_id) from rc4_bookings where user_id=alice)=1,'one paired reservation';
@@ -27,7 +27,7 @@ begin
  select count(*) into original_count from rc4_bookings;
  -- Washer would be free, but dryer overlaps: both inserts must roll back.
  rejected:=false;
- begin perform rc4_action('book',booking||'{"startTime":"11:00","duration":60}'::jsonb);
+ begin perform rc4_action('book',booking||'{"startTime":"11:00","duration":30,"dryerTime":"13:00"}'::jsonb);
  exception when others then rejected:=true; end;
  assert rejected and (select count(*) from rc4_bookings)=original_count,'partial paired reservation persisted';
  rejected:=false;
@@ -82,7 +82,7 @@ begin
  -- Exercise a booked cycle using database-only time adjustment in this rollback test.
  snap:=rc4_action('book',booking||'{"kind":"wash","startTime":"17:00"}'::jsonb);
  select id into bid from rc4_bookings where user_id=alice and status='confirmed';
- update rc4_bookings set starts_at=now()-interval '5 minutes',reserved_until=now()+interval '55 minutes' where id=bid;
+ update rc4_bookings set starts_at=now()-interval '5 minutes',reserved_until=now()+interval '40 minutes' where id=bid;
  perform rc4_action('checkIn',jsonb_build_object('id',bid));
  assert (select status from rc4_machines where id='washer-book')='running','booked cycle did not start';
  assert (select count(*) from rc4_notifications where id=bid||':started')=1,'cycle notification missing';
@@ -92,7 +92,7 @@ begin
  assert (select status from rc4_machines where id='washer-book')='available','collection did not free bookable machine';
  snap:=rc4_action('book',booking||'{"kind":"dry","startTime":"18:00"}'::jsonb);
  select id into bid from rc4_bookings where user_id=alice and status='confirmed';
- update rc4_bookings set starts_at=now()-interval '16 minutes',reserved_until=now()+interval '44 minutes' where id=bid;
+ update rc4_bookings set starts_at=now()-interval '16 minutes',reserved_until=now()+interval '29 minutes' where id=bid;
  perform rc4_tick();
  assert (select status from rc4_bookings where id=bid)='missed','booking grace expiry not enforced';
  perform set_config('request.jwt.claim.sub','',true);
