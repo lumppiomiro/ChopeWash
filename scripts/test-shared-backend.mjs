@@ -23,3 +23,10 @@ const booking = "jsonb_build_object('kind','wash','dateIso',to_char(now()+interv
 const results = await Promise.all([41,42].map(id => query(`begin; select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-0000000000${id}',true); select rc4_action('book',${booking}); select pg_sleep(1); commit;`)));
 if (results.filter(result => result.code === 0).length !== 1 || !results.some(result => result.output.includes("Someone already reserved"))) throw new Error(JSON.stringify(results));
 console.log("PASS: simultaneous residents competing for the same slot yield exactly one successful reservation.");
+for (const file of ["supabase/migrations/202610050001_shared_pools.sql", "supabase/tests/shared-pools.sql"]) {
+  console.log(file, run(psql, readFileSync(file, "utf8")));
+}
+run([...psql, "-c", "insert into auth.users values ('00000000-0000-0000-0000-000000000043','race-c@chopewash.rc4'); delete from rc4_bookings;"]);
+const pooled = await Promise.all([41,42,43].map(id => query(`begin; select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-0000000000${id}',true); select rc4_action('book',${booking}); select pg_sleep(0.2); commit;`)));
+if (pooled.filter(result => result.code === 0).length !== 2 || !pooled.some(result => result.output.includes("Not enough washer capacity"))) throw new Error(JSON.stringify(pooled));
+console.log("PASS: three concurrent residents yield exactly two pooled reservations, never overbooking.");

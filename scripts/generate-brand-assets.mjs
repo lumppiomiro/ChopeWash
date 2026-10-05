@@ -13,7 +13,8 @@ for (const [name, size] of [["icon-32.png", 32], ["icon-192.png", 192], ["icon-5
 }
 // Extra safe-zone padding protects the full drawing under round/squircle masks.
 await sharp(source).resize(384, 384).extend({ top: 64, bottom: 64, left: 64, right: 64, background: "#ffffff" }).png().toFile(fileURLToPath(new URL("icon-maskable-512.png", output)));
-const png = await sharp(source).resize(32, 32).png().toBuffer();
+// ICO decoders (including Next's dev compiler) require RGBA PNG payloads.
+const png = await sharp(source).resize(32, 32).ensureAlpha().png().toBuffer();
 const ico = Buffer.alloc(22);
 ico.writeUInt16LE(1, 2); ico.writeUInt16LE(1, 4);
 ico[6] = 32; ico[7] = 32;

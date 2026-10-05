@@ -5,7 +5,8 @@ import { requireSupabase, getSupabaseClient } from "@/lib/supabase";
 import type { BookingRequest } from "@/lib/booking-planner";
 
 export type MachineKind = "washer" | "dryer";
-export type MachineMode = "booking" | "queue";
+export type MachineMode = "booking" | "queue" | "pool";
+export type QueueRequest = { quantity?: 1 | 2; duration?: 30 | 45 | 60; dryerQuantity?: 0 | 1 | 2; dryerDuration?: 30 | 45 | 60 };
 export type MachineStatus = "available" | "running" | "finished" | "offline";
 
 export type Machine = {
@@ -16,6 +17,8 @@ export type Machine = {
   status: MachineStatus;
   minutesLeft: number;
   queueLength: number;
+  held?: boolean;
+  collectionGroup?: string[];
 };
 
 export type Booking = {
@@ -28,6 +31,8 @@ export type Booking = {
   dryerTime?: string;
   status: "confirmed" | "checked-in" | "complete" | "cancelled" | "missed";
   pairId?: string;
+  machineId?: string;
+  machineName?: string;
   startedAt?: string;
   createdAt?: string;
 };
@@ -36,6 +41,12 @@ export type QueueEntry = {
   id: string;
   kind: MachineKind;
   position: number;
+  quantity?: number;
+  duration?: 30 | 45 | 60;
+  machineIds?: string[];
+  dryerQuantity?: number;
+  dryerDuration?: 30 | 45 | 60;
+  dryerStartsAt?: string;
   joinedAt: string;
   status: "waiting" | "offered" | "claimed" | "expired";
   estimatedReadyAt?: string;
@@ -48,7 +59,8 @@ export type LaundryState = {
   machines: Machine[];
   bookings: Booking[];
   queueEntries: QueueEntry[];
-  intervals?: { machineId: string; startsAt: string; endsAt: string }[];
+  intervals?: { machineId?: string; kind?: MachineKind; quantity?: number; startsAt: string; endsAt: string }[];
+  schemaVersion?: number;
   role?: "resident" | "operator";
   serverTime?: string;
 };
@@ -68,6 +80,7 @@ export function useLaundryStore() {
       const { data, error } = await requireSupabase().rpc("rc4_snapshot");
       if (error) throw error;
       if (epoch !== sessionEpoch.current || revision !== snapshotEpoch.current) return;
+      if (data?.schemaVersion !== 3) throw new Error("The shared-pool database migration is required for this app version.");
       setState(data as LaundryState); setReady(true); setError("");
     } catch (failure) {
       if (epoch !== sessionEpoch.current || revision !== snapshotEpoch.current) return;
@@ -93,18 +106,20 @@ export function useLaundryStore() {
     return () => { lifecycleEpoch.current++; mounted = false; clearInterval(timer); window.removeEventListener("focus", wake); subscription?.unsubscribe(); };
   }, [refresh]);
   const action = useCallback(async (name: string, payload: object) => {
+    if (!ready || state.schemaVersion !== 3) throw new Error("Wait for compatible RC4 availability before making changes.");
     const epoch = sessionEpoch.current;
     snapshotEpoch.current++;
     const { data, error } = await requireSupabase().rpc("rc4_action", { action: name, payload });
     if (error) throw new Error(error.message);
     const next = data as LaundryState;
+    if (next.schemaVersion !== 3) throw new Error("The shared-pool database migration is required.");
     if (epoch !== sessionEpoch.current) throw new Error("Your session changed. Refresh and sign in again.");
     snapshotEpoch.current++;
     setState(next); setReady(true); return next;
-  }, []);
+  }, [ready, state.schemaVersion]);
   const addBooking = useCallback(async (booking: BookingRequest) => { await action("book", booking); }, [action]);
-  const joinQueue = useCallback(async (kind: MachineKind) => {
-    const next = await action("joinQueue", { kind });
+  const joinQueue = useCallback(async (kind: MachineKind, request: QueueRequest = {}) => {
+    const next = await action("joinQueue", { kind, ...request });
     const entry = next.queueEntries.find(item => item.kind === kind && ["waiting", "offered", "claimed"].includes(item.status));
     if (!entry) throw new Error("Could not load your queue position.");
     return entry;

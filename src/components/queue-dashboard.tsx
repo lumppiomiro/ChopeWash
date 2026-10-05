@@ -2,77 +2,43 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowRight, Clock3, Users, ScanLine } from "lucide-react";
+import { Clock3, Users, ScanLine } from "lucide-react";
 import { toast } from "sonner";
 import { MachineIllustration } from "@/components/machine-illustration";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter } from "@/components/ui/alert-dialog";
-import type { LaundryState, MachineKind, QueueEntry } from "@/lib/laundry-store";
+import type { LaundryState, MachineKind, QueueEntry, QueueRequest } from "@/lib/laundry-store";
 import { countdown } from "@/lib/laundry-events";
 import { isActiveQueue, queueTarget } from "@/lib/queue-state";
 import { cn } from "@/lib/utils";
 
-export function QueueDashboard({ state, onJoin, onLeave }: { state: LaundryState; onJoin: (kind: MachineKind) => Promise<QueueEntry>; onLeave: (kind: MachineKind) => Promise<void> }) {
-  const [now, setNow] = useState<number | null>(null);
-  const [leaving, setLeaving] = useState<MachineKind | null>(null);
-  useEffect(() => {
-    const first = window.setTimeout(() => setNow(Date.now()), 0);
-    const timer = window.setInterval(() => setNow(Date.now()), 1000);
-    return () => { window.clearTimeout(first); window.clearInterval(timer); };
-  }, []);
-  const [pending, setPending] = useState(false);
-  const join = async (kind: MachineKind) => {
-    setPending(true);
-    try { const entry = await onJoin(kind); toast.success(entry.status === "offered" ? "Your machine is ready. Check in within five minutes." : `You’re #${entry.position} in the ${kind} queue`); }
-    catch (error) { toast.error(error instanceof Error ? error.message : "Could not join the queue."); }
-    finally { setPending(false); }
-  };
-  const leave = async (kind: MachineKind, collected = false) => {
-    setPending(true);
-    try { await onLeave(kind); setLeaving(null); toast.success(collected ? "Laundry collected. Thank you!" : "You’ve left the queue"); }
-    catch (error) { toast.error(error instanceof Error ? error.message : "Could not release your place."); }
-    finally { setPending(false); }
-  };
-  return <>
-    <div className="grid gap-5 md:grid-cols-2">
-      {state.machines.filter((machine) => machine.mode === "queue").map((machine) => {
-        const entry = state.queueEntries.filter((item) => item.kind === machine.kind && isActiveQueue(item)).sort((a, b) => a.position - b.position)[0];
-        const offered = entry?.status === "offered";
-        const claimed = entry?.status === "claimed";
-        const target = entry ? queueTarget(entry, machine) : 0;
-        const finished = claimed && now !== null && target <= now;
-        const ahead = entry ? Math.max(0, entry.position - 1) : machine.queueLength;
-        const estimate = (machine.status === "running" ? machine.minutesLeft : 0) + ahead * 45;
-        const offline = machine.status === "offline";
-        const expired = !entry && state.queueEntries.some((item) => item.kind === machine.kind && item.status === "expired");
-        return <article key={machine.id} aria-label={`${machine.name} queue`} className={`overflow-hidden rounded-[28px] border bg-white shadow-[0_12px_36px_rgba(28,39,76,0.07)] ${entry ? "border-primary/25" : "border-white"}`}>
-          <div className={`flex items-center gap-3 px-5 py-4 ${machine.kind === "washer" ? "bg-[#f1f4ff]" : "bg-[#fff5ee]"}`}>
-            <div className="w-[125px] shrink-0"><MachineIllustration kind={machine.kind} status={machine.status} /></div>
-            <div><p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">{machine.kind === "washer" ? "Washing" : "Drying"}</p><h2 className="mt-1 text-2xl font-black tracking-tight">{machine.name}</h2><p className="mt-2 text-sm font-bold">{offline ? "Out of service" : machine.status === "available" ? "Available" : machine.status === "finished" ? "Awaiting collection" : `${machine.minutesLeft} min left`}</p></div>
-          </div>
-          <div className="p-5">
-            {entry ? <>
-              <div className={`rounded-[22px] p-5 ${offered || finished ? "bg-lime text-ink" : "bg-ink text-white"}`}>
-                <p className="text-sm font-bold opacity-70">{offered ? "Your machine is ready · claim within" : claimed ? finished ? "Cycle complete" : "Your cycle finishes in" : "Estimated turn in"}</p>
-                <p role="timer" aria-label={`${machine.name} ${claimed ? "cycle timer" : offered ? "claim timer" : "estimated wait"}`} className="mt-2 font-mono text-[2.5rem] font-bold leading-tight tracking-[-0.065em] tabular-nums">{now === null ? "—" : finished ? "Collect now" : target > now ? countdown(target, now) : "Waiting"}</p>
-                {!claimed && <p className={`mt-2 font-bold ${offered ? "text-ink" : "text-lime"}`}>You’re #{entry.position}{!offered && ` · ${ahead} ${ahead === 1 ? "person" : "people"} ahead`}</p>}
-              </div>
-              {!claimed && <div className="mt-5"><p className="mb-3 text-xs font-bold uppercase tracking-wider text-muted-foreground">Your place in line</p><ol aria-label="Queue order" className="flex items-center gap-2 overflow-x-auto pb-2"><li className="shrink-0 rounded-xl bg-surface px-3 py-3 text-xs font-bold">{machine.status === "running" ? "Running" : machine.status === "finished" ? "Collecting" : "Machine"}</li><ArrowRight aria-hidden="true" className="size-3 shrink-0 text-muted-foreground" />{Array.from({ length: Math.min(ahead, 3) }, (_, i) => <li key={i} className="grid size-10 shrink-0 place-items-center rounded-xl border text-sm font-bold text-muted-foreground">{i + 1}</li>)}{ahead > 3 && <li className="shrink-0 text-xs text-muted-foreground">+{ahead - 3}</li>}<li aria-current="step" className="rounded-xl bg-primary px-4 py-3 text-sm font-extrabold text-white">You</li></ol></div>}
-              <p className="my-4 text-sm leading-6 text-muted-foreground">{offline ? "The machine is unavailable. You can leave this queue and try the other option." : offered ? "Head to RC4 Level 1. Scan the room QR code or check in below before the timer ends." : claimed ? finished ? "Your laundry is ready. Please collect it so the next person can start." : "Your cycle has started. Come back when the timer ends to collect your laundry." : "You can wait in your room. Check back here for your turn; the estimate may change."}</p>
-              {offered && !offline && <Link href={`/check-in?source=queue&entry=${entry.id}`} className={cn(buttonVariants(), "h-12 w-full rounded-2xl font-bold")}><ScanLine className="size-4" />Check in downstairs</Link>}
-              {claimed && finished && <Button className="h-12 w-full rounded-2xl" disabled={pending} onClick={() => void leave(machine.kind, true)}>I’ve collected my laundry</Button>}
-              {!claimed && <Button variant="outline" className="mt-2 h-11 w-full rounded-2xl text-muted-foreground" onClick={() => setLeaving(machine.kind)}>Leave {machine.kind} queue</Button>}
-            </> : <>
-              {expired && <p className="mb-4 rounded-xl bg-amber-50 p-3 text-sm text-amber-900">Your claim window ended. You can join again when you’re ready.</p>}
-              <div className="grid grid-cols-2 gap-3"><div className="rounded-2xl bg-surface p-4"><Users className="size-4 text-primary" /><p className="mt-3 text-3xl font-black">{ahead}</p><p className="mt-1 text-xs text-muted-foreground">{ahead === 1 ? "person" : "people"} ahead</p></div><div className="rounded-2xl bg-surface p-4"><Clock3 className="size-4 text-primary" /><p className="mt-3 text-2xl font-black">{offline ? "—" : estimate > 0 ? `~${estimate} min` : machine.status === "available" ? "Now" : "Soon"}</p><p className="mt-1 text-xs text-muted-foreground">estimated wait</p></div></div>
-              <p className="my-4 text-sm leading-6 text-muted-foreground">{offline ? "This machine is currently unavailable." : "Join from your room. When it’s your turn, you’ll have five minutes to check in downstairs."}</p>
-              <Button disabled={offline || pending} className="h-12 w-full rounded-2xl font-bold" onClick={() => join(machine.kind)}>Join {machine.kind} queue <ArrowRight className="size-4" /></Button>
-            </>}
-          </div>
-        </article>;
-      })}
-    </div>
-    <p className="mt-5 rounded-[22px] border bg-white p-4 text-sm leading-6 text-muted-foreground">RC4 · Level 1. Washing and drying have separate queues. Wait estimates assume 45-minute cycles ahead of you; your place is held until you leave or miss your claim window.</p>
-    <AlertDialog open={leaving !== null} onOpenChange={(open) => { if (!open) setLeaving(null); }}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Leave the {leaving} queue?</AlertDialogTitle><AlertDialogDescription>You’ll lose your place. If you join again, you’ll start at the back of the queue.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><Button variant="outline" onClick={() => setLeaving(null)}>Keep my place</Button><Button variant="destructive" disabled={pending} onClick={() => { if (leaving) void leave(leaving); }}>Leave queue</Button></AlertDialogFooter></AlertDialogContent></AlertDialog>
-  </>;
+function RequestOptions({kind,request,setRequest}:{kind:MachineKind;request:QueueRequest;setRequest:(next:QueueRequest)=>void}) {
+  return <div className="space-y-4">
+    <fieldset><legend className="mb-2 text-sm font-bold">Machines needed together</legend><div className="grid grid-cols-2 gap-2">{([1,2] as const).map(quantity=><Button key={quantity} variant={request.quantity===quantity ? "default":"outline"} aria-pressed={request.quantity===quantity} onClick={()=>setRequest({...request,quantity})}>{quantity} {kind}{quantity===2?"s":""}</Button>)}</div></fieldset>
+    {kind==="dryer" ? <fieldset><legend className="mb-2 text-sm font-bold">Cycle length</legend><div className="grid grid-cols-3 gap-2">{([30,45,60] as const).map(duration=><Button key={duration} variant={request.duration===duration?"default":"outline"} aria-pressed={request.duration===duration} onClick={()=>setRequest({...request,duration})}>{duration} min</Button>)}</div></fieldset> : <><p className="text-sm font-bold text-primary">30-minute wash · fixed cycle</p><fieldset><legend className="mb-2 text-sm font-bold">Drying after washing?</legend><div className="grid grid-cols-3 gap-2">{([0,1,2] as const).map(dryerQuantity=><Button key={dryerQuantity} variant={request.dryerQuantity===dryerQuantity?"default":"outline"} aria-pressed={request.dryerQuantity===dryerQuantity} onClick={()=>setRequest({...request,dryerQuantity})}>{dryerQuantity===0?"No drying":`${dryerQuantity} dryer${dryerQuantity===2?"s":""}`}</Button>)}</div></fieldset>{!!request.dryerQuantity && <fieldset><legend className="mb-2 text-sm font-bold">Dryer cycle</legend><div className="grid grid-cols-3 gap-2">{([30,45,60] as const).map(dryerDuration=><Button key={dryerDuration} variant={request.dryerDuration===dryerDuration?"default":"outline"} aria-pressed={request.dryerDuration===dryerDuration} onClick={()=>setRequest({...request,dryerDuration})}>{dryerDuration} min</Button>)}</div><p className="mt-2 text-xs leading-5 text-muted-foreground">We’ll hold the earliest suitable dryer only once your washer offer is ready. Review its time before checking in.</p>{request.quantity===2 && request.dryerQuantity===1 && <p className="mt-2 text-xs text-amber-800">Check the dryer load limit before combining two wash loads.</p>}</fieldset>}</>}
+  </div>;
+}
+export function QueueDashboard({state,onJoin,onLeave}:{state:LaundryState;onJoin:(kind:MachineKind,request?:QueueRequest)=>Promise<QueueEntry>;onLeave:(kind:MachineKind)=>Promise<void>}) {
+  const [now,setNow]=useState<number|null>(null);
+  const [pending,setPending]=useState(false);
+  const [requests,setRequests]=useState<Record<MachineKind,QueueRequest>>({washer:{quantity:1,duration:30,dryerQuantity:0,dryerDuration:45},dryer:{quantity:1,duration:45}});
+  useEffect(()=>{const tick=()=>setNow(Date.now());const first=setTimeout(tick,0);const timer=setInterval(tick,1000);return()=>{clearTimeout(first);clearInterval(timer);};},[]);
+  const join=async(kind:MachineKind)=>{setPending(true);try{const entry=await onJoin(kind,requests[kind]);toast.success(entry.status==="offered"?"Your laundry plan is ready. Review and check in downstairs.":"Your request is in line.");}catch(error){toast.error(error instanceof Error?error.message:"Could not join.");}finally{setPending(false);}};
+  const leave=async(kind:MachineKind,collected=false)=>{if(!window.confirm(collected?"Have you collected laundry from all your assigned machines?":"Leave this queue? You’ll lose your place and any unclaimed dryer hold."))return;setPending(true);try{await onLeave(kind);toast.success(collected?"All machines released. Any reserved drying stage stays booked.":"Queue request released.");}catch(error){toast.error(error instanceof Error?error.message:"Could not release.");}finally{setPending(false);}};
+  return <><div className="grid gap-5 md:grid-cols-2">{(["washer","dryer"] as const).map(kind=>{
+    const machines=state.machines.filter(m=>m.kind===kind);const capacity=machines.filter(m=>m.status!=="offline").length;
+    const free=machines.filter(m=>m.status==="available"&&!m.held).length;const entry=state.queueEntries.find(e=>e.kind===kind&&isActiveQueue(e));
+    const offered=entry?.status==="offered",claimed=entry?.status==="claimed";const target=entry?queueTarget(entry):NaN;
+    const finished=claimed&&now!==null&&target<=now;const names=entry?.machineIds?.map(id=>machines.find(m=>m.id===id)?.name||id).join(" + ");
+    return <article key={kind} aria-label={`${kind} shared pool`} className="overflow-hidden rounded-[28px] border bg-white shadow-sm"><header className="flex items-center gap-3 bg-surface p-5"><div className="w-24 shrink-0"><MachineIllustration kind={kind} status={free?"available":machines.some(m=>m.status==="running")?"running":"finished"}/></div><div><h2 className="text-2xl font-black capitalize">{kind}s</h2><p className="mt-2 text-sm font-bold">{free} idle · {capacity} in service</p><p className="text-xs text-muted-foreground">All machines support both bookings and queue</p></div></header><div className="space-y-4 p-5">
+      {entry ? <><div className={`rounded-2xl p-5 ${offered||finished?"bg-lime":"bg-ink text-white"}`}><p className="text-sm font-bold">{offered?"Review your offer · check in within":claimed?finished?"Ready for collection":"Cycles finish in":"Earliest possible capacity in"}</p><p role="timer" className="mt-2 font-mono text-4xl font-bold">{now===null?"—":finished?"Collect now":Number.isFinite(target)&&target>now?countdown(target,now):"Waiting"}</p><p className="mt-3 font-bold">{entry.quantity||1} {kind}{entry.quantity===2?"s":""} · {entry.duration||30} min{!claimed&&` · Request #${entry.position}`}</p></div>
+        {names&&<p className="rounded-xl border p-3 font-bold">{names}</p>}
+        {!!entry.dryerQuantity&&<div className="rounded-xl bg-orange-50 p-4"><p className="font-bold">{entry.dryerQuantity} dryer{entry.dryerQuantity===2?"s":""} after washing · {entry.dryerDuration} min</p><p className="mt-1 text-sm">{entry.dryerStartsAt?new Intl.DateTimeFormat("en-SG",{timeZone:"Asia/Singapore",weekday:"short",day:"numeric",month:"short",hour:"2-digit",minute:"2-digit",hourCycle:"h23"}).format(new Date(entry.dryerStartsAt)):"Suggested and held when the washer offer is ready."}</p>{claimed&&<Link href="/?view=bookings" className="mt-2 inline-block text-sm font-bold text-primary">View reserved drying stage →</Link>}</div>}
+        <p className="text-sm leading-6 text-muted-foreground">{offered?`The whole plan is held for five minutes. Check in downstairs to start your assigned ${kind}${entry.quantity===2 ? "s" : ""} together.${entry.dryerQuantity ? " Drying is reserved for the time above, not started now." : ""}`:claimed?"Collect from every assigned machine before releasing this request.":"Your request waits for a complete gap before future reservations. The earliest capacity estimate isn’t a guaranteed turn; earlier requests and collection delays may change it."}</p>
+        {!claimed&&<ol aria-label="Your queue position" className="flex flex-wrap gap-2 text-xs font-bold"><li className="rounded-xl bg-surface p-3">{Math.max(0,entry.position-1)} earlier requests</li><li className="rounded-xl bg-primary p-3 text-white">You · {entry.quantity||1} together</li></ol>}
+        {offered&&<Link href={`/check-in?source=queue&entry=${entry.id}`} className={cn(buttonVariants(),"min-h-12 w-full rounded-xl")}><ScanLine className="size-4"/>Review and check in</Link>}
+        {finished&&<Button disabled={pending} className="min-h-12 w-full" onClick={()=>void leave(kind,true)}>I’ve collected from all machines</Button>}
+        {!claimed&&<Button variant="outline" disabled={pending} className="w-full" onClick={()=>void leave(kind)}>Leave queue</Button>}
+      </> : <><div className="grid grid-cols-2 gap-3"><p className="rounded-xl bg-surface p-4"><Users className="mb-2 size-4"/><strong>{machines[0]?.queueLength||0}</strong><span className="block text-xs">requests waiting</span></p><p className="rounded-xl bg-surface p-4"><Clock3 className="mb-2 size-4"/><strong>{free?"May fit now":"Waiting for space"}</strong><span className="block text-xs">full-cycle availability checked when joining</span></p></div><RequestOptions kind={kind} request={requests[kind]} setRequest={request=>setRequests({...requests,[kind]:request})}/><Button disabled={pending||!capacity||state.schemaVersion!==3} className="min-h-12 w-full rounded-xl" onClick={()=>void join(kind)}>Get the next suitable {kind}{requests[kind].quantity===2?"s":""}</Button></>}
+    </div></article>;
+  })}</div><p className="mt-5 rounded-2xl border bg-white p-4 text-sm leading-6 text-muted-foreground">One shared pool, no dedicated queue machines. Later requests may use short gaps only when their full cycle won’t delay an earlier feasible start. Offers include five minutes to arrive, the full cycle, and collection buffer.</p></>;
 }
