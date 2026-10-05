@@ -35,12 +35,12 @@ export function RoomDisplay() {
           <div className="grid gap-4 sm:grid-cols-2">
             {state.machines.map((machine) => {
               const Icon = machine.kind === "washer" ? Droplets : Sparkles;
-              const available = machine.status === "available";
+              const available = machine.status === "available" && !machine.held;
               return (
                 <Card key={machine.id} className={`min-h-[240px] overflow-hidden rounded-[30px] border-0 p-0 ${available ? "bg-lime text-ink" : machine.status === "offline" ? "bg-white/8 text-white" : "bg-white text-ink"}`}>
                   <div className="flex h-full flex-col p-6">
-                    <div className="flex items-start justify-between"><div className={`grid size-12 place-items-center rounded-2xl ${available ? "bg-ink text-lime" : "bg-surface text-primary"}`}><Icon className="size-6" /></div><Badge className={machine.mode === "queue" ? "bg-coral text-white" : "bg-primary text-white"}>{machine.mode === "queue" ? "QUEUE" : "BOOKING"}</Badge></div>
-                    <div className="mt-auto pt-10"><p className="text-3xl font-black tracking-[-0.05em]">{machine.name}</p>{available ? <p className="mt-2 text-2xl font-black">{machine.mode === "queue" && machine.queueLength > 0 ? "Held for queue" : "Available now"}</p> : machine.status === "finished" ? <p className="mt-2 text-2xl font-black">Awaiting collection</p> : machine.status === "offline" ? <p className="mt-2 text-xl font-bold opacity-65">Temporarily offline</p> : <div className="mt-3 flex items-end justify-between"><p className="text-4xl font-black text-primary">{machine.minutesLeft}<span className="ml-1 text-lg">min</span></p>{machine.mode === "queue" && <span className="inline-flex items-center gap-1.5 text-sm font-bold"><ListOrdered className="size-4" /> {machine.queueLength} waiting</span>}</div>}</div>
+                    <div className="flex items-start justify-between"><div className={`grid size-12 place-items-center rounded-2xl ${available ? "bg-ink text-lime" : "bg-surface text-primary"}`}><Icon className="size-6" /></div><Badge className={machine.mode === "queue" ? "bg-coral text-white" : "bg-primary text-white"}>SHARED POOL</Badge></div>
+                    <div className="mt-auto pt-10"><p className="text-3xl font-black tracking-[-0.05em]">{machine.name}</p>{machine.held ? <p className="mt-2 text-2xl font-black">Held for check-in</p> : available ? <p className="mt-2 text-2xl font-black">Available now</p> : machine.status === "finished" ? <p className="mt-2 text-2xl font-black">Awaiting collection</p> : machine.status === "offline" ? <p className="mt-2 text-xl font-bold opacity-65">Temporarily offline</p> : <div className="mt-3 flex items-end justify-between"><p className="text-4xl font-black text-primary">{machine.minutesLeft}<span className="ml-1 text-lg">min</span></p>{machine.queueLength > 0 && <span className="inline-flex items-center gap-1.5 text-sm font-bold"><ListOrdered className="size-4" /> {machine.queueLength} waiting</span>}</div>}</div>
                   </div>
                 </Card>
               );

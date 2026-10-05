@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import type { LaundryState, MachineKind, QueueEntry } from "@/lib/laundry-store";
+import type { LaundryState, MachineKind, QueueEntry, QueueRequest } from "@/lib/laundry-store";
 import type { BookingRequest } from "@/lib/booking-planner";
 
 type ModelTool = {
@@ -26,7 +26,7 @@ export function useChopeWashTools({
 }: {
   state: LaundryState;
   addBooking: (booking: BookingRequest) => Promise<void>;
-  joinQueue: (kind: MachineKind) => Promise<QueueEntry>;
+  joinQueue: (kind: MachineKind, request?: QueueRequest) => Promise<QueueEntry>;
   showQueue: () => void;
   showBookings: () => void;
 }) {
@@ -52,13 +52,13 @@ export function useChopeWashTools({
     register({
       name: "join_laundry_queue",
       title: "Join a laundry queue",
-      description: "Join the queue-only washer or dryer and open the queue view.",
-      inputSchema: { type: "object", properties: { kind: { type: "string", enum: ["washer", "dryer"] } }, required: ["kind"], additionalProperties: false },
+      description: "Request one or two shared washers or dryers; optionally pair dryers with washing.",
+      inputSchema: { type: "object", properties: { kind: { type: "string", enum: ["washer", "dryer"] }, quantity: {type:"integer",enum:[1,2]}, duration:{type:"integer",enum:[30,45,60]}, dryerQuantity:{type:"integer",enum:[0,1,2]}, dryerDuration:{type:"integer",enum:[30,45,60]} }, required: ["kind"], additionalProperties: false },
       annotations: { readOnlyHint: false, untrustedContentHint: false },
       execute: async (input) => {
         const kind = (input as { kind?: unknown }).kind;
         if (kind !== "washer" && kind !== "dryer") throw new Error("kind must be washer or dryer");
-        const entry = await joinQueue(kind);
+        const entry = await joinQueue(kind, input as QueueRequest);
         showQueue();
         return { id: entry.id, kind: entry.kind, position: entry.position, status: entry.status };
       },
@@ -75,6 +75,7 @@ export function useChopeWashTools({
           dateIso: { type: "string" },
           startTime: { type: "string" },
           duration: { type: "integer", enum: [30, 45, 60] },
+          washerCount:{type:"integer",enum:[1,2]}, dryerCount:{type:"integer",enum:[1,2]}, secondWasherDateIso:{type:"string"}, secondWasherTime:{type:"string"},
           dryerDateIso: { type: "string" }, dryerTime: { type: "string" }, dryerDuration: { type: "integer", enum: [30, 45, 60] },
         },
         required: ["kind", "dateIso", "startTime", "duration"],

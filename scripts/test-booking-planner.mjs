@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { bookingSlots, slotTimestamp, suggestDryer, validateBooking, singaporeDate, addDateDays } from "../src/lib/booking-planner.ts";
 const state = {
  serverTime: "2026-10-04T00:00:00+08:00",
- machines: [{ id: "washer-book", status: "available" }, { id: "dryer-book", status: "available" }],
+ machines: [{ id: "washer-book", kind: "washer", status: "available" }, { id: "dryer-book", kind: "dryer", status: "available" }],
  intervals: [], bookings: [], queueEntries: [],
 };
 assert.equal(singaporeDate("2026-10-03T23:30:00Z"), "2026-10-04");
@@ -21,4 +21,12 @@ assert.deepEqual(suggestDryer(state, slotTimestamp("2026-10-04", "23:30"), 45), 
 assert.equal(suggestDryer(state, slotTimestamp("2026-10-17", "23:30"), 45), null);
 state.machines[1].status = "offline";
 assert.equal(suggestDryer(state, slotTimestamp("2026-10-04", "10:00"), 45), null);
+state.machines[1].status = "available";
+state.machines.push({id:"washer-queue",kind:"washer",status:"available"},{id:"dryer-queue",kind:"dryer",status:"available"});
+state.intervals = [{kind:"washer",quantity:1,startsAt:"2026-10-04T10:00:00+08:00",endsAt:"2026-10-04T10:45:00+08:00"}];
+assert.equal(bookingSlots(state,"2026-10-04","washer-book",30,0,1).find(s=>s.time==="10:00").available,true);
+assert.equal(bookingSlots(state,"2026-10-04","washer-book",30,0,2).find(s=>s.time==="10:00").available,false);
+assert.equal(validateBooking(state,{kind:"wash",dateIso:"2026-10-04",startTime:"10:00",duration:30,washerCount:2,secondWasherDateIso:"2026-10-04",secondWasherTime:"10:15"}),"Choose two washer starts that both fit the shared pool.");
+assert.equal(validateBooking(state,{kind:"wash",dateIso:"2026-10-04",startTime:"10:00",duration:30,washerCount:2,secondWasherDateIso:"2026-10-04",secondWasherTime:"10:45"}),null);
+assert.match(validateBooking(state,{kind:"wash",dateIso:"2026-10-04",startTime:"10:00",duration:30,washerCount:2,secondWasherDateIso:"2026-10-04",secondWasherTime:""}),/second washer/);
 console.log("PASS: 15-minute slots, shared availability, fixed wash, editable dryer, midnight, month boundaries and horizon.");

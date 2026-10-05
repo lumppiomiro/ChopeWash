@@ -6,7 +6,7 @@ self.addEventListener("push", (event) => {
   let notice;
   try { notice = event.data.json(); } catch { return; }
   event.waitUntil(self.registration.showNotification(notice.title || "ChopeWash", {
-    body: notice.body || "", icon: "/icons/app-192.png", badge: "/icons/app-192.png",
+    body: notice.body || "", icon: "/branding/icon-192.png",
     tag: notice.id || "chopewash-update", data: { url: notice.url || "/" },
   }));
 });

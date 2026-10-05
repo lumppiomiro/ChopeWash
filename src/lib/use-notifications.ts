@@ -10,7 +10,7 @@ export async function deviceNotice(notice: Pick<LaundryNotice, "id" | "title" | 
   if (!("Notification" in window) || Notification.permission !== "granted") return;
   const registration = await navigator.serviceWorker.getRegistration("/");
   if (!registration?.active) throw new Error("Alerts are still preparing. Please try again.");
-  await registration.showNotification(notice.title, { body: notice.body, icon: "/icons/app-192.png", tag: notice.id, data: { url: `/?view=${notice.view}` } });
+  await registration.showNotification(notice.title, { body: notice.body, icon: "/branding/icon-192.png", tag: notice.id, data: { url: `/?view=${notice.view}` } });
 }
 async function syncPush(preferences: Preferences) {
   const client = requireSupabase();

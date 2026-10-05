@@ -28,7 +28,9 @@ export function getLaundryEvents(state: LaundryState, now: number): LaundryEvent
     // RC4 reservations always use Singapore time, regardless of the viewer's timezone.
     const starts = Date.parse(`${booking.dateIso}T${booking.startTime}:00+08:00`);
     if (!Number.isFinite(starts)) continue;
-    const title = booking.kind === "dry" ? "Dryer 01" : "Washer 01";
+    const stage = state.bookings.filter(b => b.pairId === booking.pairId && b.kind === booking.kind && b.dateIso === booking.dateIso && b.startTime === booking.startTime && b.status === booking.status && b.startedAt === booking.startedAt);
+    if (booking.pairId && stage[0]?.id !== booking.id) continue;
+    const title = stage.length > 1 ? stage.every(b=>b.machineName) ? stage.map(b=>b.machineName).join(" + ") : `${stage.length} ${booking.kind === "dry" ? "dryers" : "washers"} together` : booking.machineName || (booking.kind === "dry" ? "Dryer pool" : "Washer pool");
     const detail = `${booking.dateLabel} · ${booking.startTime} · ${booking.duration} min${booking.dryerTime ? ` · Dryer at ${booking.dryerTime}` : ""}`;
     const base = { id: booking.id, title, detail, bookingId: booking.id };
     if (booking.status === "checked-in") {
@@ -43,12 +45,12 @@ export function getLaundryEvents(state: LaundryState, now: number): LaundryEvent
   }
   for (const entry of state.queueEntries) {
     if (!isActiveQueue(entry)) continue;
-    const machine = state.machines.find((item) => item.kind === entry.kind && item.mode === "queue");
+    const machine = state.machines.find((item) => entry.machineIds?.includes(item.id) || item.kind === entry.kind);
     const target = queueTarget(entry, machine);
-    if (!Number.isFinite(target)) continue;
+    const hasEstimate = Number.isFinite(target);
     const offered = entry.status === "offered";
     const claimed = entry.status === "claimed";
-    events.push({ id: entry.id, title: `${machine?.name ?? entry.kind}${claimed ? "" : ` · Queue #${entry.position}`}`, detail: claimed ? "Your cycle · see your queue status" : offered ? "Head downstairs and check in to claim your machine" : `${Math.max(0, entry.position - 1)} ahead of you · wait times may change`, label: offered ? "Your machine is ready · claim within" : claimed ? target > now ? "Your cycle finishes in" : "Cycle finished · collect your laundry" : target > now ? "Estimated turn in" : "Waiting for the machine to be ready", target, action: "queue", active: offered || claimed, progress: claimed && target <= now ? 100 : undefined });
+    events.push({ id: entry.id, title: `${entry.machineIds?.map(id=>state.machines.find(m=>m.id===id)?.name || id).join(" + ") || `${entry.quantity || 1} ${entry.kind}(s)`}${claimed ? "" : ` · Queue #${entry.position}`}`, detail: claimed ? "Your cycle · see your queue status" : offered ? "Head downstairs and check in to claim your machine" : `${Math.max(0, entry.position - 1)} ahead of you · wait times may change`, label: offered ? "Your machine is ready · claim within" : claimed ? target > now ? "Your cycle finishes in" : "Cycle finished · collect your laundry" : target > now ? "Earliest possible capacity in" : "Waiting for a complete cycle gap", target: hasEstimate ? target : now, action: "queue", active: offered || claimed, progress: claimed && target <= now ? 100 : undefined });
   }
   return events.sort((a, b) => Number(b.active) - Number(a.active) || a.target - b.target);
 }

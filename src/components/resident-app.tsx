@@ -12,24 +12,23 @@ import {
   ListOrdered,
   LogIn,
   LogOut,
-  QrCode,
   Settings2,
   WashingMachine,
 } from "lucide-react";
 import { toast, Toaster } from "sonner";
 import { BrandMark } from "@/components/brand-mark";
 import { MachineIllustration } from "@/components/machine-illustration";
+import { LaundryPlans } from "@/components/laundry-plans";
 import { YourLaundry } from "@/components/your-laundry";
 import { QueueFlow } from "@/components/queue-flow";
 import { QueueDashboard } from "@/components/queue-dashboard";
 import { Badge } from "@/components/ui/badge";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { useLaundryStore } from "@/lib/laundry-store";
-import { cn } from "@/lib/utils";
 import { createResidentAccount, getSupabaseClient, signInWithUsername } from "@/lib/supabase";
 import { useChopeWashTools } from "@/lib/use-webmcp";
 import { disconnectPush, useNotifications } from "@/lib/use-notifications";
@@ -72,7 +71,7 @@ export function ResidentApp() {
     return () => data.subscription.unsubscribe();
   }, []);
 
-  const availableCount = useMemo(() => state.machines.filter((machine) => machine.status === "available").length, [state.machines]);
+  const availableCount = useMemo(() => state.machines.filter((machine) => machine.status === "available" && !machine.held).length, [state.machines]);
   const showQueue = useCallback(() => setView("queue"), []);
   const showBookings = useCallback(() => setView("bookings"), []);
   const navigateFromNotice = useCallback((next: "bookings" | "queue") => { setView(next); setNotificationsOpen(false); }, []);
@@ -162,10 +161,10 @@ export function ResidentApp() {
 
             <section className="grid gap-3 px-5 pt-7 sm:grid-cols-2 sm:px-0">
               <button disabled={!ready} onClick={() => router.push("/book")} className="group relative overflow-hidden rounded-[28px] bg-primary p-6 text-left text-white shadow-[0_18px_42px_rgba(47,77,255,0.24)] transition-transform hover:-translate-y-0.5">
-                <CalendarDays className="mb-9 size-7" /><p className="text-2xl font-black tracking-[-0.04em]">Book a time</p><p className="mt-1 text-sm text-white/70">Plan washing, drying, or both.</p><ChevronRight className="absolute bottom-6 right-6 size-6 transition-transform group-hover:translate-x-1" /><div className="absolute -right-12 -top-16 size-44 rounded-full border-[24px] border-white/10" />
+                <CalendarDays className="mb-9 size-7" /><p className="text-2xl font-black tracking-[-0.04em]">Plan for later</p><p className="mt-1 text-sm text-white/70">Plan washing, drying, or both.</p><ChevronRight className="absolute bottom-6 right-6 size-6 transition-transform group-hover:translate-x-1" /><div className="absolute -right-12 -top-16 size-44 rounded-full border-[24px] border-white/10" />
               </button>
               <button disabled={!ready} onClick={() => setQueueOpen(true)} className="group relative overflow-hidden rounded-[28px] bg-lime p-6 text-left text-ink shadow-[0_18px_42px_rgba(153,202,62,0.2)] transition-transform hover:-translate-y-0.5">
-                <ListOrdered className="mb-9 size-7" /><p className="text-2xl font-black tracking-[-0.04em]">Join the queue</p><p className="mt-1 text-sm text-ink/65">Get the next free machine.</p><ChevronRight className="absolute bottom-6 right-6 size-6 transition-transform group-hover:translate-x-1" /><div className="absolute -bottom-20 -right-7 size-44 rounded-full border-[24px] border-ink/7" />
+                <ListOrdered className="mb-9 size-7" /><p className="text-2xl font-black tracking-[-0.04em]">Laundry ASAP</p><p className="mt-1 text-sm text-ink/65">Request one or two machines, with optional drying.</p><ChevronRight className="absolute bottom-6 right-6 size-6 transition-transform group-hover:translate-x-1" /><div className="absolute -bottom-20 -right-7 size-44 rounded-full border-[24px] border-ink/7" />
               </button>
             </section>
 
@@ -175,9 +174,9 @@ export function ResidentApp() {
                 {state.machines.map((machine) => {
                   return (
                     <Card key={machine.id} className="gap-0 overflow-hidden rounded-[24px] border-white bg-white p-3 shadow-[0_10px_30px_rgba(28,39,76,0.07)] sm:p-4">
-                      <div className="flex justify-start"><Badge variant="secondary" className={`rounded-full text-xs ${machine.status === "available" ? "bg-mint text-emerald-900" : machine.status === "finished" ? "bg-amber-100 text-amber-900" : machine.status === "offline" ? "bg-surface text-muted-foreground" : "bg-secondary text-secondary-foreground"}`}>{statusLabel(machine.status, machine.minutesLeft)}</Badge></div>
+                      <div className="flex justify-start"><Badge variant="secondary" className={`rounded-full text-xs ${machine.status === "available" ? "bg-mint text-emerald-900" : machine.status === "finished" ? "bg-amber-100 text-amber-900" : machine.status === "offline" ? "bg-surface text-muted-foreground" : "bg-secondary text-secondary-foreground"}`}>{machine.held ? "Held for check-in" : statusLabel(machine.status, machine.minutesLeft)}</Badge></div>
                       <div className={`mt-3 flex items-center justify-center rounded-2xl ${machine.kind === "washer" ? "bg-[#f1f4ff]" : "bg-[#fff5ee]"}`}><MachineIllustration kind={machine.kind} status={machine.status} /></div>
-                      <div className="pt-3"><p className="font-extrabold">{machine.name}</p><p className="mt-0.5 text-xs text-muted-foreground sm:text-sm">{machine.mode === "booking" ? "Booking machine" : `${machine.queueLength} in queue`}</p><p className="mt-2 flex items-center gap-1.5 text-xs font-semibold text-muted-foreground"><span className={`size-1.5 rounded-full ${machine.status === "available" ? "bg-emerald-500" : machine.status === "running" ? "bg-primary" : machine.status === "finished" ? "bg-amber-500" : "bg-slate-400"}`} />{machine.status === "running" ? machine.kind === "washer" ? "Washing" : "Drying" : machine.status === "available" ? "Ready to start" : machine.status === "finished" ? "Cycle complete" : "Out of service"}</p></div>
+                      <div className="pt-3"><p className="font-extrabold">{machine.name}</p><p className="mt-0.5 text-xs text-muted-foreground sm:text-sm">{`Shared pool · ${machine.queueLength} waiting`}</p><p className="mt-2 flex items-center gap-1.5 text-xs font-semibold text-muted-foreground"><span className={`size-1.5 rounded-full ${machine.status === "available" ? "bg-emerald-500" : machine.status === "running" ? "bg-primary" : machine.status === "finished" ? "bg-amber-500" : "bg-slate-400"}`} />{machine.status === "running" ? machine.kind === "washer" ? "Washing" : "Drying" : machine.status === "available" ? machine.held ? "Held for check-in" : "Ready to start" : machine.status === "finished" ? "Cycle complete" : "Out of service"}</p></div>
                     </Card>
                   );
                 })}
@@ -192,23 +191,14 @@ export function ResidentApp() {
             <div className="mt-7 grid gap-4 md:grid-cols-2">
               {state.bookings.length === 0 ? (
                 <div className="col-span-full rounded-[28px] border border-dashed bg-white p-9 text-center"><CalendarDays className="mx-auto size-8 text-primary" /><p className="mt-4 text-xl font-black">Nothing choped yet</p><p className="mt-2 text-sm text-muted-foreground">Reserve a washer, dryer, or both for the next 14 days.</p><Button className="mt-5 rounded-2xl" disabled={!ready} onClick={() => router.push("/book")}>Book a time</Button></div>
-              ) : state.bookings.map((booking) => (
-                <Card key={booking.id} className="rounded-[28px] border-white bg-white p-5 shadow-[0_12px_36px_rgba(28,39,76,0.08)]">
-                  <div className="flex items-start justify-between"><Badge className="rounded-full bg-mint text-emerald-900 hover:bg-mint">{booking.status === "checked-in" ? "In progress" : booking.status}</Badge><span className="text-sm font-bold text-muted-foreground">{booking.duration} min</span></div>
-                  <p className="mt-6 text-2xl font-black capitalize tracking-[-0.04em]">{booking.kind === "both" ? "Wash + dry" : booking.kind}</p>
-                  <p className="mt-2 font-bold">{booking.dateLabel} · {booking.startTime}</p>
-                  {booking.dryerTime && <p className="mt-1 text-sm text-muted-foreground">Suggested dryer at {booking.dryerTime}</p>}
-                  {booking.status === "confirmed" && <><Link href={`/check-in?booking=${booking.id}`} className={cn(buttonVariants({ variant: "outline" }), "mt-6 h-11 w-full rounded-2xl")}><QrCode className="size-4" /> Check in downstairs</Link><Button variant="ghost" className="mt-2 w-full" onClick={async () => { if (!window.confirm("Cancel this reservation? Any upcoming dryer in the same reservation will also be cancelled.")) return; try { await cancelBooking(booking.id); toast.success("Reservation cancelled"); } catch (error) { toast.error(error instanceof Error ? error.message : "Cancellation failed"); } }}>Cancel reservation</Button></>}
-                  {booking.status === "checked-in" && booking.startedAt && Date.parse(state.serverTime ?? "") >= Date.parse(booking.startedAt) + booking.duration * 60000 && <Button className="mt-6 w-full rounded-2xl" onClick={async () => { try { await collectBooking(booking.id); toast.success("Machine released. Thank you!"); } catch (error) { toast.error(error instanceof Error ? error.message : "Collection failed"); } }}>I’ve collected my laundry</Button>}
-                </Card>
-              ))}
+              ) : <LaundryPlans state={state} onCancel={cancelBooking} onCollect={collectBooking} />}
             </div>
           </section>
         )}
 
         {view === "queue" && (
           <section className="animate-float-in px-5 pb-28 pt-5 sm:px-0 sm:pb-12">
-            <p className="text-sm font-bold text-primary">Spontaneous laundry</p><h1 className="text-4xl font-black tracking-[-0.055em]">Your next machine</h1><p className="mt-2 mb-7 text-muted-foreground">Join a queue, follow your turn, and head down when it’s ready.</p>
+            <p className="text-sm font-bold text-primary">Spontaneous laundry</p><h1 className="text-4xl font-black tracking-[-0.055em]">Your next machine</h1><p className="mt-2 mb-7 text-muted-foreground">Request shared machines, follow your offer, and check in downstairs.</p>
             <QueueDashboard state={state} onJoin={joinQueue} onLeave={leaveQueue} />
           </section>
         )}

@@ -5,7 +5,10 @@ import { PwaProvider } from "@/components/install-app";
 export const metadata: Metadata = {
   title: "ChopeWash · RC4 laundry, without the guesswork",
   description: "Book a laundry slot, join the live queue, and know exactly when to head downstairs.",
-  icons: { icon: "/favicon.svg", apple: "/icons/apple-touch-icon.png" },
+  icons: {
+    icon: [{ url: "/branding/icon-32.png", sizes: "32x32", type: "image/png" }, { url: "/branding/icon-192.png", sizes: "192x192", type: "image/png" }],
+    apple: "/branding/apple-touch-icon.png",
+  },
   appleWebApp: { capable: true, title: "ChopeWash", statusBarStyle: "default" },
 };
 

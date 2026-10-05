@@ -31,4 +31,6 @@ The earlier source/history and public-bundle check found no privileged credentia
 
 Local PostgreSQL tests cover overlap, paired atomicity, simultaneous competitors, FIFO, ownership, grace expiry, collection, private snapshots and authorization. Deployment must separately verify migration execution, account configuration and scheduled push.
 
+The shared-pool migration adds anonymous kind/quantity occupancy intervals, never other residents’ identities. Capacity is checked under a common machine-row lock. Internal pool helpers and the legacy mutation RPC are not executable by residents or anonymous clients. The matching app requires schema version 3; apply the reviewed migration before deploying it. Historical/running assignments are preserved, while upcoming reservations move to pooled capacity.
+
 The existing shadcn generator was moved to development dependencies without changing its version. Runtime dependency audit reported zero advisories. Development-tool advisories remain and should be reviewed separately rather than applying forced major upgrades.

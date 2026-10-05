@@ -1,18 +1,21 @@
 // Local browser QA only: anonymous availability, no authentication or writes.
 import { createServer } from "node:http";
 const snapshot = {
- serverTime: "2026-10-30T08:00:00+08:00", role: "resident", bookings: [], queueEntries: [],
+ schemaVersion: 3, serverTime: "2026-10-30T08:00:00+08:00", role: "resident", bookings: [], queueEntries: [],
  machines: [
-  { id: "washer-book", name: "Washer 01", kind: "washer", mode: "booking", status: "available", minutesLeft: 0, queueLength: 0 },
-  { id: "dryer-book", name: "Dryer 01", kind: "dryer", mode: "booking", status: "available", minutesLeft: 0, queueLength: 0 },
+  { id: "washer-book", name: "Washer 01", kind: "washer", mode: "pool", status: "available", minutesLeft: 0, queueLength: 0 },
+  { id: "dryer-book", name: "Dryer 01", kind: "dryer", mode: "pool", status: "available", minutesLeft: 0, queueLength: 0 },
+  { id: "washer-queue", name: "Washer 02", kind: "washer", mode: "pool", status: "available", minutesLeft: 0, queueLength: 0 },
+  { id: "dryer-queue", name: "Dryer 02", kind: "dryer", mode: "pool", status: "available", minutesLeft: 0, queueLength: 0 },
  ],
  intervals: [
-  { machineId: "washer-book", startsAt: "2026-10-30T09:00:00+08:00", endsAt: "2026-10-30T09:45:00+08:00" },
-  { machineId: "dryer-book", startsAt: "2026-10-30T10:30:00+08:00", endsAt: "2026-10-30T11:30:00+08:00" },
+  { kind: "washer", quantity: 1, startsAt: "2026-10-30T09:00:00+08:00", endsAt: "2026-10-30T09:45:00+08:00" },
+  { kind: "dryer", quantity: 2, startsAt: "2026-10-30T10:30:00+08:00", endsAt: "2026-10-30T11:30:00+08:00" },
  ],
 };
 createServer((request, response) => {
- response.setHeader("Access-Control-Allow-Origin", "http://localhost:3000");
+ const origin = request.headers.origin;
+ if (origin === "http://localhost:3000" || origin === "http://localhost:3001") response.setHeader("Access-Control-Allow-Origin", origin);
  response.setHeader("Access-Control-Allow-Headers", request.headers["access-control-request-headers"] || "apikey,authorization,content-type,x-client-info");
  response.setHeader("Access-Control-Allow-Methods", "POST,GET,OPTIONS");
  response.setHeader("Content-Type", "application/json");

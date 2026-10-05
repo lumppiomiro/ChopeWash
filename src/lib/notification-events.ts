@@ -16,10 +16,10 @@ export function notificationEvents(state: LaundryState, now: number): LaundryNot
     else events.push({ id: `${id}:started`, title: "Your cycle has started", body: `${title} is running. Follow the remaining time on Home.`, time: started ?? now, group: "cycles", view });
   };
   for (const booking of state.bookings) {
-    if (booking.status === "complete") continue;
+    if (booking.status === "complete" || booking.status === "cancelled") continue;
     const starts = Date.parse(`${booking.dateIso}T${booking.startTime}:00+08:00`);
     if (!Number.isFinite(starts)) continue;
-    const machine = booking.kind === "dry" ? "Dryer 01" : "Washer 01";
+    const machine = booking.machineName || (booking.kind === "dry" ? "Dryer pool" : "Washer pool");
     if (booking.status === "checked-in") {
       const started = Date.parse(booking.startedAt ?? new Date(starts).toISOString());
       cycle(booking.id, machine, started + booking.duration * MINUTE, "bookings", started);
@@ -33,8 +33,8 @@ export function notificationEvents(state: LaundryState, now: number): LaundryNot
     else events.push({ ...base, id: `${booking.id}:confirmed`, title: "Your laundry time is booked", body: `${machine} · ${booking.dateLabel} at ${booking.startTime}${booking.dryerTime ? ` · Dryer at ${booking.dryerTime}` : ""}.`, time: booking.createdAt ? Date.parse(booking.createdAt) : now });
   }
   for (const entry of state.queueEntries) {
-    const machine = state.machines.find((item) => item.kind === entry.kind && item.mode === "queue");
-    const name = machine?.name ?? (entry.kind === "washer" ? "Washer 02" : "Dryer 02");
+    const machine = state.machines.find((item) => entry.machineIds?.includes(item.id) || item.kind === entry.kind);
+    const name = entry.machineIds?.map(id=>state.machines.find(m=>m.id===id)?.name || id).join(" + ") || `${entry.quantity || 1} ${entry.kind}(s)`;
     const base = { group: "queue" as const, view: "queue" as const };
     if (entry.status === "claimed") { if (entry.cycleEndsAt) cycle(entry.id, name, Date.parse(entry.cycleEndsAt), "queue", entry.startedAt ? Date.parse(entry.startedAt) : undefined); continue; }
     if (entry.status === "expired") events.push({ ...base, id: `${entry.id}:expired`, title: "Your claim window ended", body: `${name} wasn’t claimed in time. Join the queue again when you’re ready.`, time: Date.parse(entry.offerExpiresAt ?? entry.joinedAt) });
@@ -43,9 +43,9 @@ export function notificationEvents(state: LaundryState, now: number): LaundryNot
       if (expires <= now) events.push({ ...base, id: `${entry.id}:expired`, title: "Your claim window ended", body: `Your offer for ${name} has ended. Check the queue for your next option.`, time: expires });
       else if (expires - now <= MINUTE) events.push({ ...base, id: `${entry.id}:last-call`, title: "One minute left to claim your machine", body: `${name} is waiting for you. Check in downstairs before your offer expires.`, time: expires - MINUTE, urgent: true });
       else events.push({ ...base, id: `${entry.id}:ready`, title: "It’s your turn", body: `${name} is ready. Head downstairs and check in before the five-minute claim window ends.`, time: expires - 5 * MINUTE, urgent: true });
-    } else if (machine?.status === "offline") events.push({ ...base, id: `${entry.id}:offline`, title: "Your queue machine is unavailable", body: `${name} is out of service. Check your queue or leave and choose another option.`, time: now, urgent: true });
-    else if (entry.position === 1 && machine?.status === "running" && machine.minutesLeft <= 5) events.push({ ...base, id: `${entry.id}:next`, title: "You’re next in line", body: `${name} is nearly done. Get ready, but wait for your machine-ready alert before checking in.`, time: now });
-    else events.push({ ...base, id: `${entry.id}:joined`, title: "You’re in the queue", body: `${name} · you’re #${entry.position}. Follow your estimated wait in Queue.`, time: Date.parse(entry.joinedAt) });
+    } else if (state.machines.filter(m=>m.kind===entry.kind).every(m=>m.status==="offline")) events.push({ ...base, id: `${entry.id}:offline`, title: "Your queue machine is unavailable", body: `${name} is out of service. Check your queue or leave and choose another option.`, time: now, urgent: true });
+    else if (entry.position === 1 && machine?.status === "running" && machine.minutesLeft <= 5 && (entry.quantity || 1) === 1) events.push({ ...base, id: `${entry.id}:next`, title: "You’re next in line", body: `${name} is nearly done. Get ready, but wait for your machine-ready alert before checking in.`, time: now });
+    else events.push({ ...base, id: `${entry.id}:joined`, title: "You’re in the queue", body: `${name} · you’re #${entry.position}. Follow pool availability in Queue; wait times are not guaranteed.`, time: Date.parse(entry.joinedAt) });
   }
   return events.filter((event) => Number.isFinite(event.time));
 }
