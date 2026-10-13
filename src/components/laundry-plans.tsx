@@ -6,6 +6,8 @@ import { toast } from "sonner";
 import type { LaundryState } from "@/lib/laundry-store";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { AddToCalendar } from "@/components/add-to-calendar";
+import { bookingCalendarEvents } from "@/lib/booking-calendar";
 
 export function LaundryPlans({ state, onCancel, onCollect }: { state: LaundryState; onCancel: (id: string) => Promise<void>; onCollect: (id: string) => Promise<void> }) {
   const groups = new Map<string, LaundryState["bookings"]>();
@@ -38,6 +40,7 @@ export function LaundryPlans({ state, onCancel, onCollect }: { state: LaundrySta
           {canCollect && <Button className="mt-3 w-full rounded-xl" onClick={()=>void act(()=>onCollect(b.id),"Machine released. Thank you!")}>Collected from {b.machineName || "this machine"}</Button>}
         </li>;
       })}</ol>
+      <AddToCalendar events={bookingCalendarEvents(bookings, queuedWash, state.machines)} />
       {bookings.some(b=>b.status==="missed") && upcoming && <p className="mt-3 rounded-xl bg-amber-50 p-3 text-xs leading-5">A stage was missed. Remaining stages stay reserved; cancel them if you no longer need them.</p>}
       {upcoming && <Button variant="ghost" className="mt-3 w-full" onClick={()=>{if(window.confirm("Cancel all upcoming stages of this plan? Running cycles will continue.")) void act(()=>onCancel(upcoming.id),"Upcoming plan stages cancelled");}}>Cancel upcoming stages</Button>}
     </article>;
