@@ -1,4 +1,5 @@
-/* No page caching: bookings and queue state must not be served as stale snapshots. */
+/* No page/API caching here. The app keeps an owner-scoped, labelled snapshot
+   for display only; booking writes always require a fresh backend connection. */
 self.addEventListener("install", () => self.skipWaiting());
 self.addEventListener("activate", (event) => event.waitUntil(self.clients.claim()));
 self.addEventListener("push", (event) => {

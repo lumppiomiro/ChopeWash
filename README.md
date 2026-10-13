@@ -23,7 +23,8 @@ A mobile-first shared laundry system for RC4. All residents share two washers an
 - Only the owner can check in during their booking/offer window.
 - Completion keeps a machine occupied until collection is confirmed. An operator can release finished machines after checking collection, but cannot interrupt a running cycle. Linked queue machines are released together only when every cycle is finished; the operator sees the collection group before confirming.
 - Cycles are timed from resident check-in, not ESP32 sensors. QR navigation does not prove physical presence.
-- Open pages refresh every five seconds. Personal records are owner-only; room status and anonymous occupied intervals are shared.
+- Visible pages refresh every five seconds, silently retaining the existing display. Polling pauses in hidden tabs and resumes on focus, visibility and reconnection. Same-user auth refreshes do not clear the screen.
+- A last-known snapshot is stored locally for up to six hours, scoped to the Supabase project and signed-in user. It restores only after the session identity is known; sign-out/account changes clear it. Cached data is labelled until revalidated and never authorizes writes or operator access. Mutations require a successful snapshot in the last 15 seconds and are still validated atomically by the server. This is not a fully offline app; the page itself and auth restoration may still need network access. Personal records are owner-only; room status and anonymous occupied intervals are shared.
 - No demo fallback fabricates successful reservations when the backend is unavailable.
 
 ## Routes and local development
@@ -38,6 +39,7 @@ npx tsc --noEmit
 npx next build --webpack
 node scripts/test-booking-planner.mjs
 node scripts/test-booking-calendar.mjs
+node scripts/test-laundry-cache.mjs
 ```
 
 ## Database tests

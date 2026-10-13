@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -45,7 +45,9 @@ function statusLabel(status: string, minutes: number) {
 }
 
 export function ResidentApp() {
-  const { state, ready, error: backendError, addBooking, joinQueue, leaveQueue, cancelBooking, collectBooking } = useLaundryStore();
+  const { state, ready, hasData, lastUpdatedAt, refresh, error: backendError, addBooking, joinQueue, leaveQueue, cancelBooking, collectBooking } = useLaundryStore();
+  const [authResolved, setAuthResolved] = useState(false);
+  const linkedViewApplied = useRef(false);
   const [signedIn, setSignedIn] = useState(false);
   const [username, setUsername] = useState("");
   const [creatingAccount, setCreatingAccount] = useState(false);
@@ -59,14 +61,19 @@ export function ResidentApp() {
 
   useEffect(() => {
     const client = getSupabaseClient();
-    if (!client) return;
+    if (!client) { const timer = window.setTimeout(() => setAuthResolved(true), 0); return () => window.clearTimeout(timer); }
     const apply = (email?: string) => {
       setUsername(email?.split("@")[0] ?? "");
       setSignedIn(Boolean(email));
-      const linkedView = new URLSearchParams(window.location.search).get("view");
-      if (linkedView === "queue" || linkedView === "bookings") setView(linkedView);
+      setAuthResolved(true);
+      if (!linkedViewApplied.current) {
+        linkedViewApplied.current = true;
+        const linkedView = new URLSearchParams(window.location.search).get("view");
+        if (linkedView === "queue" || linkedView === "bookings") setView(linkedView);
+      }
     };
-    void client.auth.getSession().then(({ data }) => apply(data.session?.user.email));
+    // INITIAL_SESSION restores the stored session; same-user focus/token events
+    // must not reset the current subpage or flash the login form.
     const { data } = client.auth.onAuthStateChange((_event, session) => apply(session?.user.email));
     return () => data.subscription.unsubscribe();
   }, []);
@@ -96,6 +103,8 @@ export function ResidentApp() {
       setLoginPending(false);
     }
   };
+
+  if (!authResolved) return <main className="grid min-h-dvh place-items-center bg-canvas p-5"><div className="w-full max-w-[430px] rounded-[32px] bg-white p-7 shadow-sm"><BrandMark/><p className="mt-6 text-sm text-muted-foreground">Opening your laundry room…</p><div className="mt-5 h-32 animate-pulse rounded-2xl bg-surface"/></div></main>;
 
   if (!signedIn) {
     return (
@@ -146,8 +155,9 @@ export function ResidentApp() {
           </div>
         </header>
 
-        {backendError && <p role="alert" className="m-5 rounded-2xl bg-red-50 p-4 text-sm text-red-800">Could not connect to the RC4 booking system. {backendError} Reservations are unavailable until the connection returns.</p>}
-        {!ready && !backendError && <p className="px-5 py-3 text-sm">Connecting to RC4…</p>}
+        {hasData && !ready && <div className="mx-5 flex flex-wrap items-center justify-between gap-2 rounded-2xl bg-amber-50 px-4 py-3 text-xs text-amber-900 sm:mx-0"><p>{backendError ? "Connection interrupted · showing saved data" : "Showing saved data · checking for updates…"}{lastUpdatedAt ? ` · saved ${new Intl.DateTimeFormat("en-SG",{timeZone:"Asia/Singapore",hour:"2-digit",minute:"2-digit"}).format(lastUpdatedAt)}` : ""}. Live availability is required for changes.</p>{backendError && <button className="font-bold underline" onClick={()=>void refresh()}>Retry</button>}</div>}
+        {!hasData && backendError && <p role="alert" className="m-5 rounded-2xl bg-red-50 p-4 text-sm text-red-800">Could not connect to the RC4 booking system. {backendError} Reservations are unavailable until the connection returns.</p>}
+        {!hasData && !backendError && <p className="px-5 py-3 text-sm">Connecting to RC4…</p>}
         {view === "home" && (
           <div className="animate-float-in">
             <section className="px-5 pt-4 sm:px-0">
@@ -169,7 +179,7 @@ export function ResidentApp() {
             </section>
 
             <section className="px-5 pb-28 pt-8 sm:px-0 sm:pb-12">
-              <div className="mb-4 flex items-center justify-between"><div><p className="text-xl font-black tracking-[-0.035em]">Laundry room status</p><p className="text-sm text-muted-foreground">{ready ? "Shared RC4 status · refreshes every 5 seconds" : "Connecting…"}</p></div><Button variant="ghost" onClick={() => setView("queue")} className="rounded-xl text-primary">View all</Button></div>
+              <div className="mb-4 flex items-center justify-between"><div><p className="text-xl font-black tracking-[-0.035em]">Laundry room status</p><p className="text-sm text-muted-foreground">{ready ? "Live RC4 status · updates quietly" : hasData ? "Saved status · waiting for live update" : "Connecting…"}</p></div><Button variant="ghost" onClick={() => setView("queue")} className="rounded-xl text-primary">View all</Button></div>
               <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
                 {state.machines.map((machine) => {
                   return (
