@@ -37,6 +37,7 @@ npm run lint
 npx tsc --noEmit
 npx next build --webpack
 node scripts/test-booking-planner.mjs
+node scripts/test-booking-calendar.mjs
 ```
 
 ## Database tests
@@ -51,3 +52,11 @@ Tests create a fresh database in this disposable container; they cannot connect 
 For isolated mobile layout testing, run `node scripts/booking-layout-fixture.mjs`, then start Next with `NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:4011` and a fictional `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_layout_fixture_not_a_real_key`. Visit `/book`. The fixture serves fictional availability only; authentication and reservation writes are disabled. Never use these overrides for deployment. Planner tests use Node's native TypeScript support (Node 22.18+).
 
 See [SECURITY.md](SECURITY.md) and [NOTIFICATIONS.md](NOTIFICATIONS.md). Closed-app alerts need additional push credentials and scheduling; installation alone does not enable them.
+
+## Calendar export
+
+In **Bookings**, expand **Add plan to calendar** on a laundry plan. Download the whole plan as an `.ics` file for Apple Calendar, or open individual Google Calendar links and save each event. Google can also import the whole file on a computer via Settings → Import & export. Mobile file import support varies; importing into a synced calendar on a computer is the fallback.
+
+Each machine gets its own event, including simultaneous or staggered washers, dryers and a linked claimed queue washing stage. Cancelled/missed stages are omitted; completed earlier stages remain so the entire plan is represented. Waiting queue estimates are never exported as bookings. Events use Singapore booking times (UTC in the file), actual check-in times when available, and cycle lengths without grace time. Machine labels are provisional until assignment at check-in. Future file events include a 10-minute reminder, subject to calendar app settings.
+
+This is a one-time copy, not an automatically synchronized calendar. Booking changes, cancellations and check-in delays require manual calendar updates; repeated imports may duplicate events. The file is generated locally from the signed-in resident's existing booking snapshot. No calendar account access, OAuth credentials or database changes are required. Google receives the selected event details only when the resident opens its event link.
