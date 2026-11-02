@@ -33,14 +33,14 @@ export function readSnapshotCache(storage: CacheStorage, key: string, owner: str
     }
     if (state.intervals !== undefined && !Array.isArray(state.intervals)) return null;
     // Operator access must always be established by a fresh server response.
-    return { state: { ...state, role: "resident" }, savedAt: cached.savedAt };
+    return { state: { ...state, role: "resident", machineAdmin: false }, savedAt: cached.savedAt };
   } catch { return null; }
 }
 
 export function writeSnapshotCache(storage: CacheStorage, key: string, owner: string | null, state: LaundryState, now = Date.now()): void {
   try {
     if (!owner) { storage.removeItem(key); return; }
-    storage.setItem(key, JSON.stringify({ version: 1, owner, savedAt: now, state: { ...state, role: "resident" } }));
+    storage.setItem(key, JSON.stringify({ version: 1, owner, savedAt: now, state: { ...state, role: "resident", machineAdmin: false } }));
   } catch { /* Storage may be unavailable or full; live data still works. */ }
 }
 

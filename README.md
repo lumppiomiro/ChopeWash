@@ -41,6 +41,7 @@ node scripts/test-booking-planner.mjs
 node scripts/test-booking-calendar.mjs
 node scripts/test-laundry-cache.mjs
 node scripts/test-laundry-planning.mjs
+node scripts/test-machine-admin.mjs
 ```
 
 ## Database tests
@@ -65,3 +66,11 @@ In **Bookings**, expand **Add plan to calendar** on a laundry plan. Download the
 Each machine gets its own event, including simultaneous or staggered washers, dryers and a linked claimed queue washing stage. Cancelled/missed stages are omitted; completed earlier stages remain so the entire plan is represented. Waiting queue estimates are never exported as bookings. Events use Singapore booking times (UTC in the file), actual check-in times when available, and cycle lengths without grace time. Machine labels are provisional until assignment at check-in. Future file events include a 10-minute reminder, subject to calendar app settings.
 
 This is a one-time copy, not an automatically synchronized calendar. Booking changes, cancellations and check-in delays require manual calendar updates; repeated imports may duplicate events. The file is generated locally from the signed-in resident's existing booking snapshot. No calendar account access, OAuth credentials or database changes are required. Google receives the selected event details only when the resident opens its event link.
+
+## Miro machine administration
+
+Apply `supabase/migrations/202611020001_miro_machine_admin.sql` after the shared-pool migration, then deploy the matching app. The migration grants the existing `miro` profile (verified against its Auth identity) the operator role. Only that account receives the server-derived `machineAdmin` capability; other operator accounts are also denied machine mutations. Profiles and capabilities cannot be edited by residents. Cached snapshots always strip admin access.
+
+Miro can open **App options → Machine admin panel**, or `/ops`. Select a collected machine or **Clear all collected machines**, review the exact machine list, and confirm that every listed machine is physically empty. Linked queue stages are cleared together. Running cycles, active offers and future reservations are protected; offline machines can be returned to service separately. The backend reconciles completed bookings/queue stages and records successful changes in `rc4_machine_admin_events` (not resident-readable). Released capacity may immediately be held for waiting residents.
+
+For browser QA, the isolated UX fixture also accepts `miro` / `layout-only`. Only that fictional identity can clear in-memory machines; `student` is denied. It never connects to the production database.

@@ -6,10 +6,13 @@ import { readSnapshotCache, writeSnapshotCache, clearSnapshotCache, snapshotIsFr
 
 const records = new Map();
 const storage = { getItem: key => records.get(key) ?? null, setItem: (key,value) => records.set(key,value), removeItem: key => records.delete(key) };
-const snapshot = { schemaVersion:3, role:"operator", serverTime:"2026-10-13T00:00:00Z", machines:[], bookings:[], queueEntries:[] };
+const snapshot = { schemaVersion:3, role:"operator", machineAdmin:true, serverTime:"2026-10-13T00:00:00Z", machines:[], bookings:[], queueEntries:[] };
 const key = snapshotCacheKey("fixture-project");
 writeSnapshotCache(storage,key,"alice",snapshot,1000);
 assert.equal(readSnapshotCache(storage,key,"alice",1001).state.role,"resident");
+assert.equal(readSnapshotCache(storage,key,"alice",1001).state.machineAdmin,false);
+const forged=JSON.parse(storage.getItem(key)); forged.state.machineAdmin=true; forged.state.role="operator"; storage.setItem(key,JSON.stringify(forged));
+assert.equal(readSnapshotCache(storage,key,"alice",1001).state.machineAdmin,false);
 assert.equal(readSnapshotCache(storage,key,"bob",1001),null);
 assert.equal(readSnapshotCache(storage,key,null,1001),null);
 assert.equal(readSnapshotCache(storage,key,"alice",1000+SNAPSHOT_CACHE_TTL),null);
@@ -55,6 +58,7 @@ requests.shift().resolve({data:{...snapshot,role:"resident"},error:null}); await
 const retained=store.state; auth("alice"); auth("alice","TOKEN_REFRESHED"); store=render(); assert.equal(store.state,retained); assert.equal(store.ready,true);
 listeners.get("focus")(); listeners.get("visibilitychange")(); await settle(); assert.equal(requests.length,1); // dedup
 requests.shift().resolve({data:null,error:Error("network failure")}); await settle(); store=render(); assert.equal(store.state,retained); assert.equal(store.ready,false);
+await assert.rejects(store.clearMachines(["washer-book"]),/Refreshing/);
 await assert.rejects(store.addBooking({}),/Refreshing/); assert.equal(requests.length,1); // no action RPC from cache
 requests.shift().resolve({data:snapshot,error:null}); await settle(); store=render();
 // A pre-mutation read cannot overwrite the newer successful write.

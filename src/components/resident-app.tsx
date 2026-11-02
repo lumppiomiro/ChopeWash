@@ -35,6 +35,7 @@ import { disconnectPush, useNotifications } from "@/lib/use-notifications";
 import { NotificationCentre } from "@/components/notification-centre";
 import { InstallApp } from "@/components/install-app";
 import { sharedMachineStatus } from "@/lib/laundry-planning";
+import { hasMachineAdminAccess } from "@/lib/machine-admin";
 
 type View = "home" | "bookings" | "queue";
 
@@ -225,6 +226,7 @@ export function ResidentApp() {
         <SheetContent side="right" className="w-full overflow-y-auto rounded-l-[28px] sm:max-w-[420px]">
           <SheetHeader className="border-b px-6 pb-5 pt-7"><SheetTitle className="text-3xl font-black tracking-tight">App options</SheetTitle><SheetDescription>Quick access and updates, your way.</SheetDescription></SheetHeader>
           <div className="space-y-4 p-5"><InstallApp /><Button variant="outline" className="h-12 w-full justify-start rounded-2xl" onClick={() => { setOptionsOpen(false); setNotificationsOpen(true); }}><Bell className="size-4" />Notification preferences</Button>
+            {hasMachineAdminAccess(state, ready) && <Link href="/ops" className="flex min-h-12 w-full items-center gap-2 rounded-2xl border border-primary/20 bg-secondary px-4 py-3 text-sm font-bold text-primary"><Settings2 className="size-4" />Machine admin panel</Link>}
             <button onClick={() => { void (async () => { try { await disconnectPush(); await getSupabaseClient()?.auth.signOut({ scope: "local" }); } catch { toast.error("Could not sign out safely. Please try again."); } })(); }} className="flex w-full items-center gap-2 rounded-2xl px-4 py-3 text-left text-sm font-bold text-muted-foreground hover:bg-surface"><LogOut className="size-4" /> Sign out</button>
           </div>
         </SheetContent>

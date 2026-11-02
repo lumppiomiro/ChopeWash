@@ -30,3 +30,16 @@ run([...psql, "-c", "insert into auth.users values ('00000000-0000-0000-0000-000
 const pooled = await Promise.all([41,42,43].map(id => query(`begin; select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-0000000000${id}',true); select rc4_action('book',${booking}); select pg_sleep(0.2); commit;`)));
 if (pooled.filter(result => result.code === 0).length !== 2 || !pooled.some(result => result.output.includes("Not enough washer capacity"))) throw new Error(JSON.stringify(pooled));
 console.log("PASS: three concurrent residents yield exactly two pooled reservations, never overbooking.");
+// New admin migration grants only the existing fictional Miro identity.
+run([...psql, "-c", "insert into auth.users values ('00000000-0000-0000-0000-000000000080','miro@chopewash.rc4');"]);
+for (const file of ["supabase/migrations/202611020001_miro_machine_admin.sql", "supabase/tests/machine-admin.sql"]) {
+  console.log(file, run(psql, readFileSync(file, "utf8")));
+}
+run([...psql, "-c", "delete from rc4_bookings; delete from rc4_queue; update rc4_machines set status='available',cycle_ends_at=null; update rc4_machines set status='finished' where id='washer-book';"]);
+const clears = await Promise.all([1,2].map(() => query("begin; select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000080',true); select rc4_action('clearMachines','{\"machineIds\":[\"washer-book\"]}'); select pg_sleep(0.2); commit;")));
+if (clears.filter(result=>result.code===0).length!==1) throw new Error(JSON.stringify(clears));
+console.log("PASS: concurrent admin clears release a finished machine exactly once.");
+run([...psql, "-c", "delete from rc4_bookings; delete from rc4_queue;"]);
+const securedBookings=await Promise.all([41,42,43].map(id=>query(`begin; select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-0000000000${id}',true); select rc4_action('book',${booking}); select pg_sleep(0.2); commit;`)));
+if(securedBookings.filter(result=>result.code===0).length!==2) throw new Error(JSON.stringify(securedBookings));
+console.log("PASS: the admin authorization wrapper preserves concurrent resident booking capacity.");

@@ -34,3 +34,9 @@ Local PostgreSQL tests cover overlap, paired atomicity, simultaneous competitors
 The shared-pool migration adds anonymous kind/quantity occupancy intervals, never other residents’ identities. Capacity is checked under a common machine-row lock. Internal pool helpers and the legacy mutation RPC are not executable by residents or anonymous clients. The matching app requires schema version 3; apply the reviewed migration before deploying it. Historical/running assignments are preserved, while upcoming reservations move to pooled capacity.
 
 The existing shadcn generator was moved to development dependencies without changing its version. Runtime dependency audit reported zero advisories. Development-tool advisories remain and should be reviewed separately rather than applying forced major upgrades.
+
+## Miro-only machine administration
+
+The admin migration scopes all machine mutations to `auth.uid()` matching the existing, server-owned `miro` profile with the operator role. Both the admin capability in snapshots and the mutation check are computed in SQL. Renamed shared implementation functions are not executable by resident/anonymous roles, so callers cannot bypass the wrapper. Audit events have RLS enabled and no resident grants. Cached capabilities are stripped and mutations require fresh live data.
+
+Clearing requires an exact list of finished/offline machines. Validation and updates hold the same machine locks as booking and queue writes. A running cycle or partial linked stage rejects the entire selection. Future reservations are retained and the existing queue continues to receive released capacity. The app requires physical-empty confirmation and never resets active laundry.

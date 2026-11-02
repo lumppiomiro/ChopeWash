@@ -63,6 +63,7 @@ export type LaundryState = {
   intervals?: { machineId?: string; kind?: MachineKind; quantity?: number; startsAt: string; endsAt: string }[];
   schemaVersion?: number;
   role?: "resident" | "operator";
+  machineAdmin?: boolean;
   serverTime?: string;
 };
 
@@ -178,5 +179,6 @@ export function useLaundryStore() {
   const cancelBooking = useCallback(async (id: string) => { await action("cancelBooking", { id }); }, [action]);
   const collectBooking = useCallback(async (id: string) => { await action("collectBooking", { id }); }, [action]);
   const updateMachine = useCallback(async (id: string, patch: Partial<Machine>) => { await action("operator", { id, ...patch }); }, [action]);
-  return { state, ready, hasData: state.schemaVersion === 3, lastUpdatedAt, error, refresh, addBooking, joinQueue, leaveQueue, claimQueue, updateMachine, checkIn, cancelBooking, collectBooking };
+  const clearMachines = useCallback(async (machineIds: string[]) => { await action("clearMachines", { machineIds }); }, [action]);
+  return { state, ready, hasData: state.schemaVersion === 3, lastUpdatedAt, error, refresh, addBooking, joinQueue, leaveQueue, claimQueue, updateMachine, clearMachines, checkIn, cancelBooking, collectBooking };
 }
