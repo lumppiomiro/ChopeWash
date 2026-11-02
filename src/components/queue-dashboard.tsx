@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Clock3, Users, ScanLine } from "lucide-react";
+import { ScanLine } from "lucide-react";
 import { toast } from "sonner";
 import { MachineIllustration } from "@/components/machine-illustration";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -10,6 +10,7 @@ import type { LaundryState, MachineKind, QueueEntry, QueueRequest } from "@/lib/
 import { countdown } from "@/lib/laundry-events";
 import { isActiveQueue, queueTarget } from "@/lib/queue-state";
 import { cn } from "@/lib/utils";
+import { QueueWaitPreview } from "@/components/queue-wait-preview";
 
 function RequestOptions({kind,request,setRequest}:{kind:MachineKind;request:QueueRequest;setRequest:(next:QueueRequest)=>void}) {
   return <div className="space-y-4">
@@ -17,7 +18,7 @@ function RequestOptions({kind,request,setRequest}:{kind:MachineKind;request:Queu
     {kind==="dryer" ? <fieldset><legend className="mb-2 text-sm font-bold">Cycle length</legend><div className="grid grid-cols-3 gap-2">{([30,45,60] as const).map(duration=><Button key={duration} variant={request.duration===duration?"default":"outline"} aria-pressed={request.duration===duration} onClick={()=>setRequest({...request,duration})}>{duration} min</Button>)}</div></fieldset> : <><p className="text-sm font-bold text-primary">30-minute wash · fixed cycle</p><fieldset><legend className="mb-2 text-sm font-bold">Drying after washing?</legend><div className="grid grid-cols-3 gap-2">{([0,1,2] as const).map(dryerQuantity=><Button key={dryerQuantity} variant={request.dryerQuantity===dryerQuantity?"default":"outline"} aria-pressed={request.dryerQuantity===dryerQuantity} onClick={()=>setRequest({...request,dryerQuantity})}>{dryerQuantity===0?"No drying":`${dryerQuantity} dryer${dryerQuantity===2?"s":""}`}</Button>)}</div></fieldset>{!!request.dryerQuantity && <fieldset><legend className="mb-2 text-sm font-bold">Dryer cycle</legend><div className="grid grid-cols-3 gap-2">{([30,45,60] as const).map(dryerDuration=><Button key={dryerDuration} variant={request.dryerDuration===dryerDuration?"default":"outline"} aria-pressed={request.dryerDuration===dryerDuration} onClick={()=>setRequest({...request,dryerDuration})}>{dryerDuration} min</Button>)}</div><p className="mt-2 text-xs leading-5 text-muted-foreground">We’ll hold the earliest suitable dryer only once your washer offer is ready. Review its time before checking in.</p>{request.quantity===2 && request.dryerQuantity===1 && <p className="mt-2 text-xs text-amber-800">Check the dryer load limit before combining two wash loads.</p>}</fieldset>}</>}
   </div>;
 }
-export function QueueDashboard({state,onJoin,onLeave}:{state:LaundryState;onJoin:(kind:MachineKind,request?:QueueRequest)=>Promise<QueueEntry>;onLeave:(kind:MachineKind)=>Promise<void>}) {
+export function QueueDashboard({state,ready,onJoin,onLeave}:{state:LaundryState;ready:boolean;onJoin:(kind:MachineKind,request?:QueueRequest)=>Promise<QueueEntry>;onLeave:(kind:MachineKind)=>Promise<void>}) {
   const [now,setNow]=useState<number|null>(null);
   const [pending,setPending]=useState(false);
   const [requests,setRequests]=useState<Record<MachineKind,QueueRequest>>({washer:{quantity:1,duration:30,dryerQuantity:0,dryerDuration:45},dryer:{quantity:1,duration:45}});
@@ -38,7 +39,9 @@ export function QueueDashboard({state,onJoin,onLeave}:{state:LaundryState;onJoin
         {offered&&<Link href={`/check-in?source=queue&entry=${entry.id}`} className={cn(buttonVariants(),"min-h-12 w-full rounded-xl")}><ScanLine className="size-4"/>Review and check in</Link>}
         {finished&&<Button disabled={pending} className="min-h-12 w-full" onClick={()=>void leave(kind,true)}>I’ve collected from all machines</Button>}
         {!claimed&&<Button variant="outline" disabled={pending} className="w-full" onClick={()=>void leave(kind)}>Leave queue</Button>}
-      </> : <><div className="grid grid-cols-2 gap-3"><p className="rounded-xl bg-surface p-4"><Users className="mb-2 size-4"/><strong>{machines[0]?.queueLength||0}</strong><span className="block text-xs">requests waiting</span></p><p className="rounded-xl bg-surface p-4"><Clock3 className="mb-2 size-4"/><strong>{free?"May fit now":"Waiting for space"}</strong><span className="block text-xs">full-cycle availability checked when joining</span></p></div><RequestOptions kind={kind} request={requests[kind]} setRequest={request=>setRequests({...requests,[kind]:request})}/><Button disabled={pending||!capacity||state.schemaVersion!==3} className="min-h-12 w-full rounded-xl" onClick={()=>void join(kind)}>Get the next suitable {kind}{requests[kind].quantity===2?"s":""}</Button></>}
+      </> : <><QueueWaitPreview state={state} kind={kind} request={requests[kind]} ready={ready} /><RequestOptions kind={kind} request={requests[kind]} setRequest={request=>setRequests({...requests,[kind]:request})}/>
+        <p className="rounded-xl bg-amber-50 p-3 text-xs leading-5 text-amber-950"><strong>Be ready to arrive in 5 minutes.</strong> Once offered, check in at RC4 Level 1 within five minutes or your offer expires.</p>
+        <Button disabled={pending||!ready||capacity<(requests[kind].quantity||1)||state.schemaVersion!==3} className="min-h-12 w-full rounded-xl" onClick={()=>void join(kind)}>Get the next suitable {kind}{requests[kind].quantity===2?"s":""}</Button></>}
     </div></article>;
   })}</div><p className="mt-5 rounded-2xl border bg-white p-4 text-sm leading-6 text-muted-foreground">One shared pool, no dedicated queue machines. Later requests may use short gaps only when their full cycle won’t delay an earlier feasible start. Offers include five minutes to arrive, the full cycle, and collection buffer.</p></>;
 }

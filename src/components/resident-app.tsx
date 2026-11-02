@@ -34,15 +34,9 @@ import { useChopeWashTools } from "@/lib/use-webmcp";
 import { disconnectPush, useNotifications } from "@/lib/use-notifications";
 import { NotificationCentre } from "@/components/notification-centre";
 import { InstallApp } from "@/components/install-app";
+import { sharedMachineStatus } from "@/lib/laundry-planning";
 
 type View = "home" | "bookings" | "queue";
-
-function statusLabel(status: string, minutes: number) {
-  if (status === "running") return `${minutes} min left`;
-  if (status === "finished") return "Collect now";
-  if (status === "offline") return "Offline";
-  return "Available";
-}
 
 export function ResidentApp() {
   const { state, ready, hasData, lastUpdatedAt, refresh, error: backendError, addBooking, joinQueue, leaveQueue, cancelBooking, collectBooking } = useLaundryStore();
@@ -184,7 +178,7 @@ export function ResidentApp() {
                 {state.machines.map((machine) => {
                   return (
                     <Card key={machine.id} className="gap-0 overflow-hidden rounded-[24px] border-white bg-white p-3 shadow-[0_10px_30px_rgba(28,39,76,0.07)] sm:p-4">
-                      <div className="flex justify-start"><Badge variant="secondary" className={`rounded-full text-xs ${machine.status === "available" ? "bg-mint text-emerald-900" : machine.status === "finished" ? "bg-amber-100 text-amber-900" : machine.status === "offline" ? "bg-surface text-muted-foreground" : "bg-secondary text-secondary-foreground"}`}>{machine.held ? "Held for check-in" : statusLabel(machine.status, machine.minutesLeft)}</Badge></div>
+                      <div className="flex justify-start"><Badge variant="secondary" className={`h-auto min-h-5 max-w-full whitespace-normal rounded-full text-center text-xs leading-tight ${machine.status === "available" ? "bg-mint text-emerald-900" : machine.status === "finished" ? "bg-amber-100 text-amber-900" : machine.status === "offline" ? "bg-surface text-muted-foreground" : "bg-secondary text-secondary-foreground"}`}>{machine.held ? "Held for check-in" : sharedMachineStatus(machine.status, machine.minutesLeft)}</Badge></div>
                       <div className={`mt-3 flex items-center justify-center rounded-2xl ${machine.kind === "washer" ? "bg-[#f1f4ff]" : "bg-[#fff5ee]"}`}><MachineIllustration kind={machine.kind} status={machine.status} /></div>
                       <div className="pt-3"><p className="font-extrabold">{machine.name}</p><p className="mt-0.5 text-xs text-muted-foreground sm:text-sm">{`Shared pool · ${machine.queueLength} waiting`}</p><p className="mt-2 flex items-center gap-1.5 text-xs font-semibold text-muted-foreground"><span className={`size-1.5 rounded-full ${machine.status === "available" ? "bg-emerald-500" : machine.status === "running" ? "bg-primary" : machine.status === "finished" ? "bg-amber-500" : "bg-slate-400"}`} />{machine.status === "running" ? machine.kind === "washer" ? "Washing" : "Drying" : machine.status === "available" ? machine.held ? "Held for check-in" : "Ready to start" : machine.status === "finished" ? "Cycle complete" : "Out of service"}</p></div>
                     </Card>
@@ -209,7 +203,7 @@ export function ResidentApp() {
         {view === "queue" && (
           <section className="animate-float-in px-5 pb-28 pt-5 sm:px-0 sm:pb-12">
             <p className="text-sm font-bold text-primary">Spontaneous laundry</p><h1 className="text-4xl font-black tracking-[-0.055em]">Your next machine</h1><p className="mt-2 mb-7 text-muted-foreground">Request shared machines, follow your offer, and check in downstairs.</p>
-            <QueueDashboard state={state} onJoin={joinQueue} onLeave={leaveQueue} />
+            <QueueDashboard state={state} ready={ready} onJoin={joinQueue} onLeave={leaveQueue} />
           </section>
         )}
 
@@ -220,7 +214,7 @@ export function ResidentApp() {
         </nav>
       </div>
 
-      <QueueFlow open={queueOpen} onOpenChange={setQueueOpen} state={state} onJoin={joinQueue} onLeave={leaveQueue} />
+      <QueueFlow open={queueOpen} onOpenChange={setQueueOpen} state={state} ready={ready} onJoin={joinQueue} onLeave={leaveQueue} />
       <Sheet open={notificationsOpen} onOpenChange={setNotificationsOpen}>
         <SheetContent side="right" className="w-full overflow-y-auto rounded-l-[28px] sm:max-w-[460px]">
           <SheetHeader className="border-b px-6 pb-5 pt-7"><SheetTitle className="text-3xl font-black tracking-[-0.05em]">Notifications</SheetTitle><SheetDescription>Updates that need your attention.</SheetDescription></SheetHeader>

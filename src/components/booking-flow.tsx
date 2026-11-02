@@ -6,6 +6,8 @@ import { ArrowLeft, ArrowRight, Check, ChevronDown, ChevronLeft, ChevronRight, C
 import { Toaster } from "sonner";
 import { BrandMark } from "@/components/brand-mark";
 import { Button } from "@/components/ui/button";
+import { PlanTimingSummary } from "@/components/plan-timing-summary";
+import { planTiming } from "@/lib/laundry-planning";
 import type { LaundryState } from "@/lib/laundry-store";
 import { addDateDays, bookingSlots, dateLabel, GRACE_MINUTES, MINUTE, singaporeDate, singaporeTime, slotTimestamp, suggestDryer, validateBooking, type BookingRequest, type CycleDuration, type Slot } from "@/lib/booking-planner";
 
@@ -83,7 +85,7 @@ function ReservationSummary({ request }: { request: BookingRequest }) {
     if(request.washerCount===2 && request.secondWasherTime) rows.push({name:"Second washer",date:request.secondWasherDateIso || request.dateIso,time:request.secondWasherTime,duration:30,wash:true});
   }
   if(request.kind!=="wash") rows.push({name:`${request.dryerCount || 1} ${request.dryerCount===2 ? "dryers" : "dryer"}`,date:request.kind==="both" ? request.dryerDateIso! : request.dateIso,time:request.kind==="both" ? request.dryerTime! : request.startTime,duration:request.kind==="both" ? request.dryerDuration! : request.duration,wash:false});
-  return <div className="space-y-3">{rows.map(row => {
+  return <div className="space-y-3"><PlanTimingSummary request={request} />{rows.map(row => {
     const start=slotTimestamp(row.date,row.time); const Icon=row.wash ? Droplets : Sparkles;
     return <div key={row.name} className="rounded-[22px] bg-surface p-4"><div className="flex items-center gap-3"><Icon className="size-5 text-primary"/><div><h3 className="font-extrabold">{row.name}</h3><p className="text-xs text-muted-foreground">{row.duration}-minute cycle · machine assigned at check-in</p></div></div><p className="mt-4 text-xl font-black">{row.time} <span className="text-sm text-muted-foreground">→ {singaporeTime(start+row.duration*MINUTE)}</span></p><p className="mt-1 text-sm font-bold">{dateLabel(row.date)}</p><p className="mt-3 text-xs leading-5 text-muted-foreground">Check in {row.time}–{singaporeTime(start+GRACE_MINUTES*MINUTE)}. The cycle starts when you check in.</p></div>;
   })}</div>;
@@ -123,6 +125,7 @@ export function BookingFlow({ state, ready, connectionError, onConfirm }: { stat
   const dryerSlots = bookingSlots(state, dryerDate, "dryer-book", dryDuration, Number.isFinite(washStart) ? Math.max(washStart, washerCount === 2 && staggered ? slotTimestamp(secondDate || washerDate, secondTime) : washStart) + 45 * MINUTE : 0, dryerCount);
   const request: BookingRequest = { washerCount, dryerCount, ...(kind !== "dry" && washerCount === 2 && staggered ? { secondWasherDateIso: secondDate || washerDate, secondWasherTime: secondTime } : {}), kind, dateIso: primaryDate, startTime: primaryTime, duration: primaryDuration, ...(kind === "both" ? { dryerDateIso: dryerDate, dryerTime, dryerDuration: dryDuration } : {}) };
   const invalid = validateBooking(state, request);
+  const displayedTiming = planTiming(stage === "review" && reviewed ? reviewed : request);
   const review = () => { if (!ready || invalid) { setError(invalid || "Wait for shared availability."); return; } setReviewed(request); setError(""); setStage("review"); window.scrollTo({ top: 0, behavior: "smooth" }); };
   const confirm = async () => {
     if (!reviewed) return;
@@ -153,7 +156,7 @@ export function BookingFlow({ state, ready, connectionError, onConfirm }: { stat
             </div>
             <aside className={`${card} lg:sticky lg:top-6`}><h2 className={label}>Your laundry plan</h2>{primaryTime && !invalid ? <div className="mt-4"><ReservationSummary request={request} /></div> : <div className="mt-4 space-y-3"><p className="text-xl font-black">A little planning,<br />a lot less waiting.</p><p className="text-sm leading-6 text-muted-foreground">{primaryTime && invalid ? invalid : "Pick a date and a free start time to build your plan."}</p></div>}<div className="mt-5 border-t pt-4"><p className="flex gap-2 text-xs font-semibold"><Clock3 className="size-4 shrink-0 text-primary" />15-minute check-in grace for each slot</p><p className="mt-3 text-xs leading-5 text-muted-foreground">Capacity is shared with all RC4 residents. Physical machines are assigned at check-in. They’re held only after you confirm.</p></div></aside>
           </div>}
-        <footer className="fixed inset-x-0 bottom-0 z-30 border-t border-ink/10 bg-white/95 px-4 pt-3 pb-[max(16px,env(safe-area-inset-bottom))] backdrop-blur"><div className="mx-auto flex w-full max-w-[1016px] items-center gap-3 sm:gap-6"><div className="min-w-0 flex-1"><p className="text-sm font-extrabold">{stage === "review" ? "Ready to reserve?" : primaryTime ? `${dateLabel(primaryDate)} · ${primaryTime}` : "Choose your start time"}</p><p className="mt-1 text-xs text-muted-foreground">{kind === "both" ? "Wash + dry · shared machine pools" : kind === "wash" ? "Washer · 30-minute cycle" : `Dryer · ${dryDuration}-minute cycle`}</p></div><Button className="min-h-12 shrink-0 rounded-2xl px-4 text-sm font-bold sm:px-7" disabled={pending || !ready || (stage === "edit" && Boolean(invalid))} onClick={() => { if (stage === "review") void confirm(); else review(); }}>{pending ? "Reserving…" : stage === "review" ? "Confirm booking" : "Review booking"}<ArrowRight className="size-4" /></Button></div></footer>
+        <footer className="fixed inset-x-0 bottom-0 z-30 border-t border-ink/10 bg-white/95 px-4 pt-3 pb-[max(16px,env(safe-area-inset-bottom))] backdrop-blur"><div className="mx-auto flex w-full max-w-[1016px] items-center gap-3 sm:gap-6"><div className="min-w-0 flex-1"><p className="text-sm font-extrabold">{displayedTiming && !invalid ? `Finish ~${singaporeTime(displayedTiming.finishesAt)}` : stage === "review" ? "Ready to reserve?" : "Choose your start time"}</p><p className="mt-1 text-xs text-muted-foreground">{displayedTiming && !invalid ? `${dateLabel(singaporeDate(displayedTiming.finishesAt))} · if on time` : kind === "both" ? "Wash + dry" : kind === "wash" ? "Washer · 30 min" : `Dryer · ${dryDuration} min`}</p></div><Button className="min-h-12 shrink-0 rounded-2xl px-4 text-sm font-bold sm:px-7" disabled={pending || !ready || (stage === "edit" && Boolean(invalid))} onClick={() => { if (stage === "review") void confirm(); else review(); }}>{pending ? "Reserving…" : stage === "review" ? "Confirm booking" : "Review booking"}<ArrowRight className="size-4" /></Button></div></footer>
       </>}
     </div>
   </main>;

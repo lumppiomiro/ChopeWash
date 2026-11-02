@@ -40,6 +40,7 @@ npx next build --webpack
 node scripts/test-booking-planner.mjs
 node scripts/test-booking-calendar.mjs
 node scripts/test-laundry-cache.mjs
+node scripts/test-laundry-planning.mjs
 ```
 
 ## Database tests
@@ -52,6 +53,8 @@ node scripts/test-shared-backend.mjs
 Tests create a fresh database in this disposable container; they cannot connect to production. They cover paired atomicity, overlapping slots, simultaneous competitors, shared pools, multi-machine concurrency, gap protection, backfill fairness, duplicates, ownership, grace expiry, collection and authorization. Remove the named container afterwards.
 
 For isolated mobile layout testing, run `node scripts/booking-layout-fixture.mjs`, then start Next with `NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:4011` and a fictional `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_layout_fixture_not_a_real_key`. Visit `/book`. The fixture serves fictional availability only; authentication and reservation writes are disabled. Never use these overrides for deployment. Planner tests use Node's native TypeScript support (Node 22.18+).
+
+For resident UX checks, use `node scripts/ux-layout-fixture.mjs` and start Next with `NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:4012` and the same fictional key. Open its local control page to switch between collection, running and free-capacity scenarios. Sign in to the local app as `student` / `layout-only`. This separate fixture simulates a fictional session and rejects all laundry mutations; it never connects to production.
 
 See [SECURITY.md](SECURITY.md) and [NOTIFICATIONS.md](NOTIFICATIONS.md). Closed-app alerts need additional push credentials and scheduling; installation alone does not enable them.
 
